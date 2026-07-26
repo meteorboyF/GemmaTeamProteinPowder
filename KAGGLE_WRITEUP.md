@@ -270,7 +270,15 @@ with each other and to be identical across runs.
 
 ## 4. Technical architecture
 
-### Component diagram
+### System architecture
+
+![System architecture — components, the single model gateway, and the fallback chain](media/architecture.png)
+
+### User flow and data pipeline
+
+![User flow — the three-step wizard, data shape at each stage, and every failure path](media/user-flow.png)
+
+### Component diagram (text)
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐

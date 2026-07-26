@@ -1,0 +1,209 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1120" viewBox="0 0 1600 1120" font-family="DejaVu Sans, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7a"/>
+    </marker>
+    <marker id="arrowTeal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#0f8a7e"/>
+    </marker>
+    <marker id="arrowRed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#c2410c"/>
+    </marker>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0b1f33" flood-opacity="0.10"/>
+    </filter>
+  </defs>
+
+  <rect width="1600" height="1120" fill="#f6f8fa"/>
+
+  <!-- ── Title ───────────────────────────────────────────────────────── -->
+  <text x="56" y="62" font-size="33" font-weight="700" fill="#0b1f33">Oushudh Bondhu <tspan font-family="Noto Sans Bengali">(ওষুধ বন্ধু)</tspan> — System Architecture</text>
+  <text x="56" y="94" font-size="18" fill="#5b6b7a">Gemma 4 prescription reader for Bangladesh · every model call flows through one gateway</text>
+  <line x1="56" y1="112" x2="1544" y2="112" stroke="#d8dee4" stroke-width="2"/>
+
+  <!-- ── Layer 1: Input ──────────────────────────────────────────────── -->
+  <text x="56" y="152" font-size="13" font-weight="700" fill="#8b98a5" letter-spacing="1.5">INPUT</text>
+  <rect x="56" y="164" width="250" height="76" rx="10" fill="#ffffff" stroke="#c9d3dc" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="78" y="184" width="34" height="26" rx="5" fill="none" stroke="#5b6b7a" stroke-width="2"/>
+  <rect x="86" y="179" width="12" height="6" rx="2" fill="none" stroke="#5b6b7a" stroke-width="2"/>
+  <circle cx="95" cy="197" r="7" fill="none" stroke="#5b6b7a" stroke-width="2"/>
+  <text x="126" y="194" font-size="16.5" font-weight="600" fill="#0b1f33">Prescription photo</text>
+  <text x="126" y="216" font-size="14" fill="#5b6b7a">camera or gallery upload</text>
+
+  <!-- ── Layer 2: UI ─────────────────────────────────────────────────── -->
+  <text x="56" y="292" font-size="13" font-weight="700" fill="#8b98a5" letter-spacing="1.5">PRESENTATION — Streamlit multipage</text>
+  <rect x="56" y="304" width="1488" height="132" rx="12" fill="#eef4fb" stroke="#b9cde3" stroke-width="1.5"/>
+
+  <rect x="80" y="326" width="330" height="88" rx="9" fill="#ffffff" stroke="#c9d3dc" stroke-width="1.5"/>
+  <text x="100" y="352" font-size="16" font-weight="700" fill="#0b1f33">app.py</text>
+  <text x="100" y="374" font-size="13.5" fill="#5b6b7a">shell · sidebar nav · model badge</text>
+  <text x="100" y="394" font-size="13.5" fill="#5b6b7a">medical disclaimer on every screen</text>
+
+  <rect x="430" y="326" width="240" height="88" rx="9" fill="#ffffff" stroke="#c9d3dc" stroke-width="1.5"/>
+  <text x="450" y="352" font-size="16" font-weight="700" fill="#0b1f33">1_Scan.py</text>
+  <text x="450" y="374" font-size="13.5" fill="#5b6b7a">capture / upload</text>
+  <text x="450" y="394" font-size="13.5" fill="#5b6b7a">preprocess, then extract</text>
+
+  <rect x="690" y="326" width="330" height="88" rx="9" fill="#ffffff" stroke="#0f8a7e" stroke-width="2.5"/>
+  <text x="710" y="352" font-size="16" font-weight="700" fill="#0b1f33">2_Result.py</text>
+  <text x="710" y="374" font-size="13.5" fill="#0f8a7e" font-weight="600">VERIFY grid, then FINAL output</text>
+  <text x="710" y="394" font-size="13.5" fill="#5b6b7a">warnings · timetable · Bangla · audio</text>
+
+  <rect x="1040" y="326" width="240" height="88" rx="9" fill="#ffffff" stroke="#c9d3dc" stroke-width="1.5"/>
+  <text x="1060" y="352" font-size="16" font-weight="700" fill="#0b1f33">3_History.py</text>
+  <text x="1060" y="374" font-size="13.5" fill="#5b6b7a">past prescriptions</text>
+  <text x="1060" y="394" font-size="13.5" fill="#5b6b7a">read-only replay</text>
+
+  <rect x="1300" y="326" width="220" height="88" rx="9" fill="#fff8e6" stroke="#e0b94a" stroke-width="1.5"/>
+  <text x="1320" y="352" font-size="14" font-weight="700" fill="#7a5b00">RULE #2</text>
+  <text x="1320" y="374" font-size="13" fill="#7a5b00">The disclaimer renders</text>
+  <text x="1320" y="393" font-size="13" fill="#7a5b00">on every single screen</text>
+
+  <!-- ── Layer 3: Domain modules ─────────────────────────────────────── -->
+  <text x="56" y="490" font-size="13" font-weight="700" fill="#8b98a5" letter-spacing="1.5">DOMAIN LOGIC</text>
+
+  <rect x="56" y="502" width="286" height="150" rx="10" fill="#ffffff" stroke="#c9d3dc" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="78" y="530" font-size="16" font-weight="700" fill="#0b1f33">ocr_pipeline.py</text>
+  <text x="78" y="556" font-size="13.5" fill="#5b6b7a">PIL preprocess: EXIF rotate,</text>
+  <text x="78" y="576" font-size="13.5" fill="#5b6b7a">1600px, autocontrast, JPEG</text>
+  <text x="78" y="602" font-size="13.5" fill="#5b6b7a">Gemma vision to JSON</text>
+  <text x="78" y="626" font-size="13.5" fill="#5b6b7a">defensive parse to dataclasses</text>
+
+  <rect x="366" y="502" width="286" height="150" rx="10" fill="#ffffff" stroke="#c9d3dc" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="388" y="530" font-size="16" font-weight="700" fill="#0b1f33">explain.py</text>
+  <text x="388" y="556" font-size="13.5" fill="#5b6b7a">Bangla explanation</text>
+  <text x="388" y="576" font-size="12.5" fill="#0f8a7e" font-weight="600">— Gemma generates</text>
+  <text x="388" y="602" font-size="13.5" fill="#5b6b7a">dose timetable</text>
+  <text x="388" y="622" font-size="12.5" fill="#c2410c" font-weight="600">— pure Python, deterministic</text>
+  <text x="388" y="642" font-size="12" fill="#8b98a5">grid and audio cannot disagree</text>
+
+  <rect x="676" y="502" width="286" height="150" rx="10" fill="#ffffff" stroke="#c9d3dc" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="698" y="530" font-size="16" font-weight="700" fill="#0b1f33">tts.py</text>
+  <text x="698" y="556" font-size="13.5" fill="#5b6b7a">gTTS Bangla voice</text>
+  <text x="698" y="578" font-size="13.5" fill="#5b6b7a">sentence-boundary chunking</text>
+  <text x="698" y="600" font-size="13.5" fill="#5b6b7a">audio cache on disk</text>
+  <text x="698" y="628" font-size="12.5" fill="#a05a00" font-weight="600">cloud-only — the offline asterisk</text>
+
+  <rect x="986" y="502" width="286" height="150" rx="10" fill="#fff5f0" stroke="#c2410c" stroke-width="2.5" filter="url(#shadow)"/>
+  <text x="1008" y="530" font-size="16" font-weight="700" fill="#0b1f33">safety.py</text>
+  <text x="1008" y="556" font-size="13.5" fill="#5b6b7a">duplicate generic / class</text>
+  <text x="1008" y="576" font-size="13.5" fill="#5b6b7a">interaction rules · max dose</text>
+  <text x="1008" y="602" font-size="13" font-weight="700" fill="#c2410c">NO MODEL AUTHORS A WARNING</text>
+  <text x="1008" y="624" font-size="12.5" fill="#8b98a5">Gemma only normalises</text>
+  <text x="1008" y="642" font-size="12.5" fill="#8b98a5">brand to generic, for lookup</text>
+
+  <rect x="1296" y="502" width="248" height="150" rx="10" fill="#ffffff" stroke="#c9d3dc" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="1318" y="530" font-size="16" font-weight="700" fill="#0b1f33">db.py</text>
+  <text x="1318" y="556" font-size="13.5" fill="#5b6b7a">SQLite history</text>
+  <text x="1318" y="578" font-size="13.5" fill="#5b6b7a">medicines stored as rows,</text>
+  <text x="1318" y="596" font-size="13.5" fill="#5b6b7a">not one JSON blob</text>
+  <text x="1318" y="620" font-size="12.5" fill="#0f8a7e" font-weight="600">query active drugs by</text>
+  <text x="1318" y="638" font-size="12.5" fill="#0f8a7e" font-weight="600">generic across scans</text>
+
+  <!-- ── Layer 4: Gateway ────────────────────────────────────────────── -->
+  <rect x="56" y="718" width="906" height="176" rx="12" fill="#e9f7f5" stroke="#0f8a7e" stroke-width="2.5" filter="url(#shadow)"/>
+  <text x="82" y="742" font-size="12" font-weight="700" fill="#5f9a94" letter-spacing="1.5">MODEL GATEWAY — THE ONLY PATH TO A MODEL (RULE #8)</text>
+  <text x="82" y="768" font-size="18" font-weight="700" fill="#0b3d38">gemma_client.generate(prompt, image=None, json_mode=False)</text>
+  <text x="82" y="788" font-size="13" fill="#3d6b66">No other module may import the SDK. Fallback, status and caching are properties of the system.</text>
+
+  <rect x="82" y="800" width="176" height="54" rx="8" fill="#ffffff" stroke="#0f8a7e" stroke-width="1.5"/>
+  <circle cx="100" cy="821" r="6" fill="#1a9c4a"/>
+  <text x="114" y="826" font-size="13.5" font-weight="700" fill="#0b3d38">gemma-4-31b-it</text>
+  <text x="114" y="844" font-size="11.5" fill="#5b6b7a">primary · dense</text>
+
+  <line x1="262" y1="827" x2="300" y2="827" stroke="#0f8a7e" stroke-width="2" marker-end="url(#arrowTeal)"/>
+  <text x="281" y="816" font-size="10.5" fill="#5b6b7a" text-anchor="middle">429</text>
+
+  <rect x="304" y="800" width="150" height="54" rx="8" fill="#ffffff" stroke="#0f8a7e" stroke-width="1.5"/>
+  <text x="379" y="824" font-size="13" font-weight="700" fill="#0b3d38" text-anchor="middle">backoff × 3</text>
+  <text x="379" y="843" font-size="11.5" fill="#5b6b7a" text-anchor="middle">tenacity, exponential</text>
+
+  <line x1="458" y1="827" x2="496" y2="827" stroke="#0f8a7e" stroke-width="2" marker-end="url(#arrowTeal)"/>
+
+  <rect x="500" y="800" width="196" height="54" rx="8" fill="#ffffff" stroke="#0f8a7e" stroke-width="1.5"/>
+  <circle cx="518" cy="815" r="6" fill="#e0b94a"/>
+  <text x="532" y="826" font-size="13.5" font-weight="700" fill="#0b3d38">gemma-4-26b-a4b-it</text>
+  <text x="532" y="844" font-size="11.5" fill="#5b6b7a">sparse MoE · ~4B active</text>
+
+  <line x1="700" y1="827" x2="732" y2="827" stroke="#0f8a7e" stroke-width="2" marker-end="url(#arrowTeal)"/>
+
+  <rect x="736" y="800" width="128" height="54" rx="8" fill="#ffffff" stroke="#0f8a7e" stroke-width="1.5"/>
+  <circle cx="754" cy="815" r="6" fill="#2b7fd4"/>
+  <text x="768" y="826" font-size="13" font-weight="700" fill="#0b3d38">local Ollama</text>
+  <text x="768" y="844" font-size="11.5" fill="#5b6b7a">offline</text>
+
+  <line x1="868" y1="827" x2="884" y2="827" stroke="#c2410c" stroke-width="2" marker-end="url(#arrowRed)"/>
+  <rect x="884" y="800" width="66" height="54" rx="8" fill="#fff5f0" stroke="#c2410c" stroke-width="1.5"/>
+  <circle cx="917" cy="816" r="6" fill="#c2410c"/>
+  <text x="917" y="838" font-size="10.5" font-weight="700" fill="#c2410c" text-anchor="middle">error</text>
+  <text x="917" y="850" font-size="10" fill="#c2410c" text-anchor="middle">document</text>
+
+  <text x="82" y="879" font-size="12.5" fill="#3d6b66">Total failure returns a <tspan font-weight="700">structured error document, never an exception</tspan> — the UI cannot crash.</text>
+
+  <!-- ── Grounding data ──────────────────────────────────────────────── -->
+  <rect x="986" y="718" width="558" height="176" rx="12" fill="#fff5f0" stroke="#c2410c" stroke-width="2" filter="url(#shadow)"/>
+  <text x="1010" y="750" font-size="17" font-weight="700" fill="#7a2a08">Grounding data — not the model</text>
+  <rect x="1010" y="764" width="252" height="70" rx="8" fill="#ffffff" stroke="#e0a68a" stroke-width="1.5"/>
+  <text x="1028" y="788" font-size="14" font-weight="700" fill="#0b1f33">data/drugs_bd.csv</text>
+  <text x="1028" y="810" font-size="12.5" fill="#5b6b7a">~38 BD brands to generics,</text>
+  <text x="1028" y="827" font-size="12.5" fill="#5b6b7a">dup groups, dose ceilings</text>
+
+  <rect x="1278" y="764" width="242" height="70" rx="8" fill="#ffffff" stroke="#e0a68a" stroke-width="1.5"/>
+  <text x="1296" y="788" font-size="14" font-weight="700" fill="#0b1f33">INTERACTION_RULES</text>
+  <text x="1296" y="810" font-size="12.5" fill="#5b6b7a">hand-written tag-pair</text>
+  <text x="1296" y="827" font-size="12.5" fill="#5b6b7a">table, conservative</text>
+
+  <text x="1010" y="858" font-size="12.5" font-weight="700" fill="#7a2a08">Every duplicate / interaction / max-dose verdict originates here.</text>
+  <text x="1010" y="878" font-size="12" fill="#8b5a3c">A hallucinated warning is as dangerous as a missed one. (RULE #4)</text>
+
+  <!-- ── Layer 5: External ───────────────────────────────────────────── -->
+  <text x="56" y="948" font-size="13" font-weight="700" fill="#8b98a5" letter-spacing="1.5">EXTERNAL</text>
+  <rect x="56" y="960" width="286" height="82" rx="10" fill="#ffffff" stroke="#c9d3dc" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="78" y="988" font-size="15.5" font-weight="700" fill="#0b1f33">Gemini API</text>
+  <text x="78" y="1010" font-size="13" fill="#5b6b7a">google-genai SDK · free tier</text>
+  <text x="78" y="1030" font-size="13" fill="#5b6b7a">key from .env, never committed</text>
+
+  <rect x="366" y="960" width="286" height="82" rx="10" fill="#ffffff" stroke="#c9d3dc" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="388" y="988" font-size="15.5" font-weight="700" fill="#0b1f33">Ollama daemon</text>
+  <text x="388" y="1010" font-size="13" fill="#5b6b7a">localhost:11434 · on-device</text>
+  <text x="388" y="1030" font-size="13" fill="#0f8a7e" font-weight="600">the real offline story</text>
+
+  <rect x="676" y="960" width="868" height="82" rx="10" fill="#f0f3f6" stroke="#c9d3dc" stroke-width="1.5"/>
+  <text x="698" y="988" font-size="15.5" font-weight="700" fill="#0b1f33">No fine-tuning</text>
+  <text x="698" y="1010" font-size="13" fill="#5b6b7a">Gemma 4 as-is with few-shot prompting. No ethically-sourced corpus of real prescriptions exists, and</text>
+  <text x="698" y="1030" font-size="13" fill="#5b6b7a">staying on stock weights keeps the offline path a plain model pull with no custom artifact to distribute.</text>
+
+  <!-- ── Connectors ──────────────────────────────────────────────────── -->
+  <!-- input -> scan page -->
+  <path d="M 181 240 L 181 280 L 550 280 L 550 326" fill="none" stroke="#5b6b7a" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- UI bus -->
+  <line x1="550" y1="414" x2="550" y2="470" stroke="#5b6b7a" stroke-width="2"/>
+  <line x1="855" y1="414" x2="855" y2="470" stroke="#5b6b7a" stroke-width="2"/>
+  <line x1="1160" y1="414" x2="1160" y2="470" stroke="#5b6b7a" stroke-width="2"/>
+  <line x1="199" y1="470" x2="1420" y2="470" stroke="#5b6b7a" stroke-width="2"/>
+  <line x1="199" y1="470" x2="199" y2="502" stroke="#5b6b7a" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="509" y1="470" x2="509" y2="502" stroke="#5b6b7a" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="819" y1="470" x2="819" y2="502" stroke="#5b6b7a" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="1129" y1="470" x2="1129" y2="502" stroke="#5b6b7a" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="1420" y1="470" x2="1420" y2="502" stroke="#5b6b7a" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- modules -> gateway -->
+  <line x1="199" y1="652" x2="199" y2="718" stroke="#0f8a7e" stroke-width="2.5" marker-end="url(#arrowTeal)"/>
+  <line x1="509" y1="652" x2="509" y2="718" stroke="#0f8a7e" stroke-width="2.5" marker-end="url(#arrowTeal)"/>
+  <path d="M 1040 652 L 1040 688 L 700 688 L 700 718" fill="none" stroke="#0f8a7e" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arrowTeal)"/>
+  <text x="742" y="682" font-size="11.5" fill="#0f8a7e" font-style="italic">brand to generic only</text>
+
+  <!-- safety -> grounding data -->
+  <line x1="1200" y1="652" x2="1200" y2="718" stroke="#c2410c" stroke-width="2.5" marker-end="url(#arrowRed)"/>
+  <text x="1212" y="692" font-size="12" font-weight="700" fill="#c2410c">verdicts</text>
+
+  <!-- gateway -> external -->
+  <line x1="199" y1="894" x2="199" y2="960" stroke="#5b6b7a" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="509" y1="894" x2="509" y2="960" stroke="#5b6b7a" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- footer -->
+  <line x1="56" y1="1066" x2="1544" y2="1066" stroke="#d8dee4" stroke-width="2"/>
+  <text x="56" y="1092" font-size="13.5" fill="#8b98a5">Build With Gemma @ Bangladesh · GenAI for Good · Team Protein Powder</text>
+  <text x="1544" y="1092" font-size="13.5" fill="#8b98a5" text-anchor="end">Interprets and reminds — never diagnoses, prescribes, or changes a dose.</text>
+</svg>
