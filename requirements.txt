@@ -1,0 +1,12 @@
+streamlit>=1.36
+google-genai>=0.3.0
+pillow>=10.0
+gtts>=2.5
+pandas>=2.0
+python-dotenv>=1.0
+tenacity>=8.2
+
+# Optional: local offline fallback. Requires an Ollama daemon running locally
+# with the model pulled (see README). Safe to omit — gemma_client degrades to a
+# structured error if this import is unavailable.
+ollama>=0.3.0

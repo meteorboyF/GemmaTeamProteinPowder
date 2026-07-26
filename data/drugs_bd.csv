@@ -1,0 +1,39 @@
+brand,generic,strength,drug_class,duplicate_group,max_daily_mg,interaction_tags,common_use_bn
+Napa,Paracetamol,500 mg,analgesic_antipyretic,paracetamol,4000,paracetamol,জ্বর ও ব্যথা কমায়
+Ace,Paracetamol,500 mg,analgesic_antipyretic,paracetamol,4000,paracetamol,জ্বর ও ব্যথা কমায়
+Fast,Paracetamol,500 mg,analgesic_antipyretic,paracetamol,4000,paracetamol,জ্বর ও ব্যথা কমায়
+Reset,Paracetamol,500 mg,analgesic_antipyretic,paracetamol,4000,paracetamol,জ্বর ও ব্যথা কমায়
+Xpa,Paracetamol,500 mg,analgesic_antipyretic,paracetamol,4000,paracetamol,জ্বর ও ব্যথা কমায়
+Seclo,Omeprazole,20 mg,ppi,ppi,40,ppi,পেটের অ্যাসিড ও গ্যাস কমায়
+Losectil,Omeprazole,20 mg,ppi,ppi,40,ppi,পেটের অ্যাসিড ও গ্যাস কমায়
+Maxpro,Esomeprazole,20 mg,ppi,ppi,40,ppi,পেটের অ্যাসিড ও গ্যাস কমায়
+Pantonix,Pantoprazole,20 mg,ppi,ppi,80,ppi,পেটের অ্যাসিড ও গ্যাস কমায়
+Alatrol,Cetirizine,10 mg,antihistamine,antihistamine,10,antihistamine;sedating,অ্যালার্জি ও চুলকানি কমায়
+Fexo,Fexofenadine,120 mg,antihistamine,antihistamine,180,antihistamine,অ্যালার্জি ও সর্দি কমায়
+Monas,Montelukast,10 mg,leukotriene_antagonist,montelukast,10,,শ্বাসকষ্ট ও অ্যালার্জি নিয়ন্ত্রণে রাখে
+Sultolin,Salbutamol,2 mg,bronchodilator,salbutamol,32,,শ্বাসনালী খুলে শ্বাস নিতে সাহায্য করে
+Moxacil,Amoxicillin,500 mg,antibiotic_penicillin,amoxicillin,3000,antibiotic,জীবাণুর সংক্রমণ সারায়
+Moxaclav,Amoxicillin + Clavulanic acid,625 mg,antibiotic_penicillin,amoxicillin,3000,antibiotic,জীবাণুর সংক্রমণ সারায়
+Zimax,Azithromycin,500 mg,antibiotic_macrolide,azithromycin,500,antibiotic;macrolide;qt_prolonging,জীবাণুর সংক্রমণ সারায়
+Cef-3,Cefixime,200 mg,antibiotic_cephalosporin,cefixime,400,antibiotic,জীবাণুর সংক্রমণ সারায়
+Ciprocin,Ciprofloxacin,500 mg,antibiotic_quinolone,ciprofloxacin,1500,antibiotic;quinolone;qt_prolonging,জীবাণুর সংক্রমণ সারায়
+Levox,Levofloxacin,500 mg,antibiotic_quinolone,levofloxacin,750,antibiotic;quinolone;qt_prolonging,জীবাণুর সংক্রমণ সারায়
+Amodis,Metronidazole,400 mg,antibiotic_nitroimidazole,metronidazole,2000,antibiotic;metronidazole,পেটের জীবাণু ও আমাশয় সারায়
+Doxicap,Doxycycline,100 mg,antibiotic_tetracycline,doxycycline,200,antibiotic;divalent_cation_sensitive,জীবাণুর সংক্রমণ সারায়
+Clofenac,Diclofenac,50 mg,nsaid,nsaid,150,nsaid,ব্যথা ও ফোলা কমায়
+Ibufen,Ibuprofen,400 mg,nsaid,nsaid,2400,nsaid,ব্যথা ও জ্বর কমায়
+Anaflex,Naproxen,500 mg,nsaid,nsaid,1000,nsaid,ব্যথা ও ফোলা কমায়
+Etorix,Etoricoxib,90 mg,nsaid,nsaid,120,nsaid,বাত ও ব্যথা কমায়
+Ecosprin,Aspirin,75 mg,antiplatelet,aspirin,150,nsaid;antiplatelet,রক্ত জমাট বাঁধা কমায়
+Amdocal,Amlodipine,5 mg,ccb,amlodipine,10,,উচ্চ রক্তচাপ নিয়ন্ত্রণে রাখে
+Angilock,Losartan,50 mg,arb,losartan,100,acei_arb,উচ্চ রক্তচাপ নিয়ন্ত্রণে রাখে
+Bisocor,Bisoprolol,5 mg,beta_blocker,bisoprolol,10,,উচ্চ রক্তচাপ ও হৃদস্পন্দন নিয়ন্ত্রণে রাখে
+Comet,Metformin,500 mg,antidiabetic_biguanide,metformin,2550,,ডায়াবেটিসে রক্তের সুগার কমায়
+Secrin,Glimepiride,2 mg,antidiabetic_sulfonylurea,glimepiride,8,hypoglycaemia_risk,ডায়াবেটিসে রক্তের সুগার কমায়
+Atova,Atorvastatin,10 mg,statin,statin,80,statin,রক্তের চর্বি কমায়
+Rosuva,Rosuvastatin,10 mg,statin,statin,40,statin,রক্তের চর্বি কমায়
+Omidon,Domperidone,10 mg,prokinetic,domperidone,30,qt_prolonging,বমি ভাব ও পেট ফাঁপা কমায়
+Emistat,Ondansetron,4 mg,antiemetic,ondansetron,24,qt_prolonging,বমি বন্ধ করে
+Cortan,Prednisolone,5 mg,corticosteroid,prednisolone,,steroid,ফোলা ও প্রদাহ কমায়
+Calbo-D,Calcium + Vitamin D3,500 mg,supplement,calcium,,divalent_cation,হাড় শক্ত রাখতে সাহায্য করে
+Zeefol,Ferrous fumarate + Folic acid,150 mg,supplement,iron,,divalent_cation,রক্তস্বল্পতা কমায়

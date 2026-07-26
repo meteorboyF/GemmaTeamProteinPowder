@@ -1,0 +1,36 @@
+# --- secrets (RULES.md #7) ---
+.env
+.env.*
+!.env.example
+
+# --- python ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# --- app data (RULES.md #6: no patient data in the repo) ---
+*.db
+*.sqlite
+*.sqlite3
+data/uploads/
+data/audio/
+
+# --- os / editor ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# --- streamlit local secrets ---
+.streamlit/secrets.toml
+
+# --- local tooling state (machine-specific, not project config) ---
+.claude/settings.local.json
