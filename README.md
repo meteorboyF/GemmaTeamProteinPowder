@@ -1,3 +1,12 @@
+---
+title: Oushudh Bondhu
+emoji: 💊
+colorFrom: green
+colorTo: blue
+sdk: docker
+app_port: 8501
+---
+
 # 💊 Oushudh Bondhu (ওষুধ বন্ধু)
 
 A Bangladesh-focused prescription understanding workflow built for **Build With Gemma
