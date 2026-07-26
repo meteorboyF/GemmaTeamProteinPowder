@@ -51,3 +51,25 @@ def test_total_failure_is_structured_and_never_raises(monkeypatch):
 
     assert gemma_client.is_error(output)
     assert gemma_client.parse_error(output)["attempts"]
+
+
+def test_multimodal_cloud_call_is_not_retried(monkeypatch):
+    calls = []
+
+    def fail(*_args, **_kwargs):
+        calls.append(True)
+        raise gemma_client.TransientModelError("timeout")
+
+    monkeypatch.setattr(gemma_client, "_call_cloud", fail)
+
+    try:
+        gemma_client._call_cloud_with_retry(
+            "model",
+            "prompt",
+            [b"view-one", b"view-two"],
+            True,
+        )
+    except gemma_client.TransientModelError:
+        pass
+
+    assert len(calls) == 1

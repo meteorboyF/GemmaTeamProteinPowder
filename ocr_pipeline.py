@@ -16,7 +16,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from PIL import Image, ImageEnhance, ImageOps
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageOps
 
 import config
 import gemma_client
@@ -128,15 +128,52 @@ def extract_prescription(image_bytes: bytes, extra_context: str | None = None) -
 
     """
     try:
+        views, source_size, confidence_cap = build_analysis_views(image_bytes)
+        view_note = (
+            "The attachment shows the SAME prescription as a full page and enlarged "
+            "overlapping detail views. It may be a contact sheet or several images. "
+            "Merge evidence across views and never duplicate a medicine because it "
+            "appears in more than one panel."
+        )
+        if confidence_cap is not None:
+            view_note += (
+                f" The source is only {source_size[0]}x{source_size[1]} pixels. "
+                "Do not claim high certainty when letter shapes are unresolved."
+            )
+        combined_context = "\n".join(
+            part for part in (extra_context, view_note) if part
+        )
+        ultra_low_resolution = source_size[0] * source_size[1] < 100_000
+        if ultra_low_resolution:
+            combined_context += (
+                "\nThis source is extremely low resolution. Return only medicine text "
+                "whose letter shapes are visible. Mark the rest unreadable and finish "
+                "without trying to reconstruct likely prescriptions."
+            )
         raw = gemma_client.generate(
-            prompts.extraction_prompt(extra_context),
-            image=image_bytes,
+            prompts.extraction_prompt(
+                combined_context,
+                include_example=not ultra_low_resolution,
+            ),
+            image=views,
             json_mode=True,
         )
         prescription = parse_extraction(raw)
         status = gemma_client.get_status()
         prescription.model_source = status.source
         prescription.model_id = status.model_id
+        if prescription.ok and confidence_cap is not None:
+            prescription.overall_confidence = min(
+                prescription.overall_confidence,
+                confidence_cap,
+            )
+            for medicine in prescription.medicines:
+                medicine.confidence = min(medicine.confidence, confidence_cap)
+                if "source_image_quality" not in medicine.uncertain_fields:
+                    medicine.uncertain_fields.append("source_image_quality")
+            prescription.unreadable_regions.append(
+                "ছবির রেজোলিউশন খুব কম; অক্ষরের আকার নিশ্চিত নয়।"
+            )
         return prescription
     except Exception as exc:
         logger.exception("unexpected extraction failure")
@@ -146,6 +183,162 @@ def extract_prescription(image_bytes: bytes, extra_context: str | None = None) -
                 "message_bn": "প্রেসক্রিপশনটি পড়া যায়নি। পরিষ্কার ছবি দিয়ে আবার চেষ্টা করুন।",
             }
         )
+
+
+def build_analysis_views(
+    image_bytes: bytes,
+    max_views: int = 4,
+) -> tuple[list[bytes], tuple[int, int], float | None]:
+    """Create a full-page view plus enlarged overlapping crops.
+
+    Upscaling cannot recover missing pixels, but it prevents a vision encoder from
+    shrinking already tiny handwriting even further. The returned confidence cap is a
+    deterministic honesty guard based on source pixel count.
+    """
+    if not image_bytes:
+        return [image_bytes], (0, 0), 0.0
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as source:
+            image = ImageOps.exif_transpose(source).convert("RGB")
+            source_size = image.size
+            source_pixels = source_size[0] * source_size[1]
+            _, confidence_cap = assess_source_image(image_bytes)
+
+            full = _enhance_view(image, upscale=True)
+            # Multiple image parts can time out on free-tier endpoints. For small
+            # sources, pack full/top/bottom into one contact sheet instead.
+            if source_pixels < 100_000:
+                return [_encode_jpeg(full)], source_size, confidence_cap
+            if confidence_cap is not None:
+                return (
+                    [_encode_jpeg(_contact_sheet(full))],
+                    source_size,
+                    confidence_cap,
+                )
+
+            views = [_encode_jpeg(full)]
+            if max_views <= 1:
+                return views, source_size, confidence_cap
+
+            width, height = full.size
+            vertical = height >= width
+            long_edge = height if vertical else width
+            short_edge = width if vertical else height
+            # Dense documents benefit from three overlapping bands. Avoid crops when
+            # the page is close to square or too small to produce a distinct view.
+            if long_edge >= short_edge * 1.15:
+                crop_extent = min(long_edge, int(long_edge * 0.48))
+                starts = [0, (long_edge - crop_extent) // 2, long_edge - crop_extent]
+                for start in starts[: max_views - 1]:
+                    box = (
+                        (0, start, width, start + crop_extent)
+                        if vertical
+                        else (start, 0, start + crop_extent, height)
+                    )
+                    crop = full.crop(box)
+                    views.append(_encode_jpeg(_enhance_view(crop, upscale=True)))
+            return views, source_size, confidence_cap
+    except Exception:
+        logger.warning("could not build analysis views", exc_info=True)
+        return [image_bytes], (0, 0), 0.55
+
+
+def assess_source_image(
+    image_bytes: bytes,
+) -> tuple[tuple[int, int], float | None]:
+    """Return source dimensions and the deterministic confidence ceiling."""
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as source:
+            size = ImageOps.exif_transpose(source).size
+        pixels = size[0] * size[1]
+        cap = 0.55 if pixels < 100_000 else 0.68 if pixels < 250_000 else None
+        return size, cap
+    except Exception:
+        return (0, 0), 0.55
+
+
+def _contact_sheet(full: Image.Image) -> Image.Image:
+    """One-image full-page + enlarged top/bottom layout for low-res sources."""
+    canvas_width = config.MAX_IMAGE_DIM
+    canvas_height = config.MAX_IMAGE_DIM
+    gutter = 18
+    label_height = 38
+    left_width = 620
+    right_x = left_width + gutter
+    panel_height = (canvas_height - gutter) // 2
+    canvas = Image.new("RGB", (canvas_width, canvas_height), "white")
+
+    def paste_contained(
+        source: Image.Image,
+        box: tuple[int, int, int, int],
+    ) -> None:
+        x0, y0, x1, y1 = box
+        available = (max(1, x1 - x0), max(1, y1 - y0 - label_height))
+        tile = ImageOps.contain(source, available, Image.Resampling.LANCZOS)
+        x = x0 + (available[0] - tile.width) // 2
+        y = y0 + label_height + (available[1] - tile.height) // 2
+        canvas.paste(tile, (x, y))
+
+    draw = ImageDraw.Draw(canvas)
+    panels = [
+        ("FULL PAGE", full, (0, 0, left_width, canvas_height)),
+    ]
+    overlap = max(1, int(full.height * 0.12))
+    split = full.height // 2
+    top = full.crop((0, 0, full.width, min(full.height, split + overlap)))
+    bottom = full.crop((0, max(0, split - overlap), full.width, full.height))
+    panels.extend(
+        [
+            ("TOP DETAIL", top, (right_x, 0, canvas_width, panel_height)),
+            (
+                "BOTTOM DETAIL",
+                bottom,
+                (right_x, panel_height + gutter, canvas_width, canvas_height),
+            ),
+        ]
+    )
+    for label, panel, box in panels:
+        draw.rectangle(box, outline="#8a8a8a", width=2)
+        draw.text((box[0] + 8, box[1] + 7), label, fill="#333333")
+        paste_contained(panel, box)
+    return canvas
+
+
+def _enhance_view(image: Image.Image, upscale: bool) -> Image.Image:
+    """Mild document enhancement that preserves decimals and faint strokes."""
+    result = image.convert("RGB")
+    longest = max(result.size)
+    if longest > config.MAX_IMAGE_DIM:
+        result.thumbnail(
+            (config.MAX_IMAGE_DIM, config.MAX_IMAGE_DIM),
+            Image.Resampling.LANCZOS,
+        )
+    elif upscale and longest < config.MAX_IMAGE_DIM:
+        scale = min(config.MAX_IMAGE_DIM / longest, 6.0)
+        result = result.resize(
+            (
+                max(1, round(result.width * scale)),
+                max(1, round(result.height * scale)),
+            ),
+            Image.Resampling.LANCZOS,
+        )
+    result = ImageOps.autocontrast(result, cutoff=1)
+    result = ImageEnhance.Contrast(result).enhance(1.12)
+    result = result.filter(
+        ImageFilter.UnsharpMask(radius=1.4, percent=135, threshold=3)
+    )
+    return result
+
+
+def _encode_jpeg(image: Image.Image) -> bytes:
+    output = io.BytesIO()
+    image.save(
+        output,
+        format="JPEG",
+        quality=config.JPEG_QUALITY,
+        optimize=True,
+    )
+    return output.getvalue()
 
 
 def parse_extraction(raw: str) -> Prescription:

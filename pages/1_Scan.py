@@ -11,6 +11,7 @@ from __future__ import annotations
 import streamlit as st
 
 import config
+import ocr_pipeline
 from app import (
     SS_AUDIO,
     SS_EXPLANATION_SOURCE,
@@ -67,14 +68,24 @@ with tab_demo:
 
 if image_bytes:
     st.image(image_bytes, caption="নির্বাচিত ছবি", width="stretch")
+    source_size, quality_cap = ocr_pipeline.assess_source_image(image_bytes)
+    if quality_cap == 0.55:
+        st.error(
+            f"ছবিটি মাত্র {source_size[0]}×{source_size[1]} পিক্সেল। ছোট অক্ষরের "
+            "আসল রেখা হারিয়ে গেছে—পরিষ্কার ফলের জন্য কাছ থেকে আবার ছবি তুলুন। "
+            "চেষ্টা করা যাবে, কিন্তু সব ফল যাচাই করতে হবে।"
+        )
+    elif quality_cap is not None:
+        st.warning(
+            f"ছবিটি কম রেজোলিউশনের ({source_size[0]}×{source_size[1]})। "
+            "অস্পষ্ট ওষুধের নাম ফার্মাসিস্টকে দেখিয়ে নিশ্চিত করুন।"
+        )
 
     if st.button("🔍 পড়া শুরু করুন", type="primary", width="stretch"):
         with st.spinner("Gemma প্রেসক্রিপশন পড়ছে… একটু সময় লাগতে পারে"):
             try:
-                import ocr_pipeline
-
                 processed = ocr_pipeline.preprocess(image_bytes)
-                prescription = ocr_pipeline.extract_prescription(processed)
+                prescription = ocr_pipeline.extract_prescription(image_bytes)
                 st.session_state[SS_IMAGE_BYTES] = processed
                 st.session_state[SS_PRESCRIPTION] = prescription
                 st.session_state[SS_READ_ONLY] = False

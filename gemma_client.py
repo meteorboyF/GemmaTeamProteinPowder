@@ -24,7 +24,7 @@ import logging
 import threading
 import time
 from dataclasses import asdict, dataclass, field
-from typing import Any, Callable
+from typing import Any, Callable, Sequence
 
 from tenacity import (
     RetryError,
@@ -286,7 +286,24 @@ def _guess_mime(image: bytes) -> str:
     return "image/jpeg"
 
 
-def _call_cloud(model_id: str, prompt: str, image: bytes | None, json_mode: bool) -> str:
+ImageInput = bytes | Sequence[bytes]
+
+
+def _image_list(image: ImageInput | None) -> list[bytes]:
+    """Normalize one or more views of the same document."""
+    if image is None:
+        return []
+    if isinstance(image, bytes):
+        return [image]
+    return [item for item in image if isinstance(item, bytes) and item]
+
+
+def _call_cloud(
+    model_id: str,
+    prompt: str,
+    image: ImageInput | None,
+    json_mode: bool,
+) -> str:
     """One cloud request. Raises Transient/PermanentModelError; never returns empty."""
     global _json_mode_supported
 
@@ -297,8 +314,13 @@ def _call_cloud(model_id: str, prompt: str, image: bytes | None, json_mode: bool
         raise PermanentModelError(f"google-genai not installed: {exc}") from exc
 
     parts: list[Any] = [types.Part.from_text(text=prompt)]
-    if image is not None:
-        parts.append(types.Part.from_bytes(data=image, mime_type=_guess_mime(image)))
+    for image_bytes in _image_list(image):
+        parts.append(
+            types.Part.from_bytes(
+                data=image_bytes,
+                mime_type=_guess_mime(image_bytes),
+            )
+        )
 
     def _do(use_json: bool, use_latency_controls: bool = True) -> Any:
         kwargs: dict[str, Any] = {}
@@ -365,11 +387,18 @@ def _call_cloud(model_id: str, prompt: str, image: bytes | None, json_mode: bool
 
 
 def _call_cloud_with_retry(
-    model_id: str, prompt: str, image: bytes | None, json_mode: bool
+    model_id: str,
+    prompt: str,
+    image: ImageInput | None,
+    json_mode: bool,
 ) -> str:
     """Chain step 2: exponential-backoff retry around a single cloud model."""
+    # Re-uploading several document views is expensive and an identical retry rarely
+    # fixes vision latency. Move to the other Gemma model after one failed image call;
+    # keep configured retries for small text-only requests.
+    attempts = 1 if _image_list(image) else config.RETRY_ATTEMPTS
     retryer = Retrying(
-        stop=stop_after_attempt(config.RETRY_ATTEMPTS),
+        stop=stop_after_attempt(attempts),
         wait=wait_exponential(
             multiplier=config.RETRY_BACKOFF_BASE_SECONDS,
             max=config.RETRY_BACKOFF_MAX_SECONDS,
@@ -383,7 +412,11 @@ def _call_cloud_with_retry(
 # --------------------------------------------------------------------------------
 # Local path (Ollama) — chain step 4, and the offline story
 # --------------------------------------------------------------------------------
-def _call_ollama(prompt: str, image: bytes | None, json_mode: bool) -> str:
+def _call_ollama(
+    prompt: str,
+    image: ImageInput | None,
+    json_mode: bool,
+) -> str:
     """Local Gemma via an Ollama daemon. Raises ModelError on any failure."""
     try:
         import ollama
@@ -391,8 +424,9 @@ def _call_ollama(prompt: str, image: bytes | None, json_mode: bool) -> str:
         raise PermanentModelError(f"ollama package not installed: {exc}") from exc
 
     message: dict[str, Any] = {"role": "user", "content": prompt}
-    if image is not None:
-        message["images"] = [image]  # the client accepts raw bytes
+    images = _image_list(image)
+    if images:
+        message["images"] = images  # the client accepts raw bytes
 
     try:
         client = ollama.Client(host=config.OLLAMA_HOST)
@@ -442,14 +476,19 @@ def local_available() -> bool:
 # --------------------------------------------------------------------------------
 # Public API
 # --------------------------------------------------------------------------------
-def generate(prompt: str, image: bytes | None = None, json_mode: bool = False) -> str:
+def generate(
+    prompt: str,
+    image: ImageInput | None = None,
+    json_mode: bool = False,
+) -> str:
     """Generate text from Gemma 4, walking the fallback chain until something answers.
 
     This is the ONLY function in the codebase that talks to a model (RULES.md #8).
 
     Args:
         prompt: The full prompt. Keep the text itself in ``prompts.py`` (RULES.md #11).
-        image: Optional raw image bytes for multimodal extraction (PNG/JPEG/WebP).
+        image: Optional image bytes, or several views of the same document, for
+            multimodal extraction (PNG/JPEG/WebP).
         json_mode: Ask for JSON. Best-effort — always parse defensively downstream,
             since Gemma on the Gemini API may not honour structured output.
 

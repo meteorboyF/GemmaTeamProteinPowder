@@ -24,7 +24,8 @@ current and saved prescriptions for known duplicate medicines and selected inter
 | Demo | One-click synthetic prescription with no patient data |
 | Resilience | retry → cloud fallback → local Ollama → structured error + last-good cache |
 
-The repository currently has **23 automated tests** and a live synthetic-image check
+The repository currently has **27 automated tests**, a live synthetic-image check, and
+an adaptive difficult-image evaluation
 against `gemma-4-31b-it`. See [VALIDATION.md](VALIDATION.md).
 
 ## Why this is not a chatbot
@@ -131,6 +132,8 @@ python -m compileall -q .
 ## Known limitations
 
 - Handwritten clinical text can be misread even at high model confidence.
+- Extremely small images cannot be made legible by upscaling; the app warns before
+  inference and caps confidence. See [DIFFICULT_IMAGE_EVALUATION.md](DIFFICULT_IMAGE_EVALUATION.md).
 - The local table covers only a small set of brands and a conservative set of rules.
 - Max-dose checks cannot account for age, weight, kidney/liver function, diagnosis or
   medicines absent from the scan; they are advisory only.

@@ -6,7 +6,7 @@ Last run: **26 July 2026**
 
 ```text
 python -m pytest -q
-23 passed
+27 passed
 
 python -m compileall -q .
 PASS

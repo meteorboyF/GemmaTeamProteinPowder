@@ -131,13 +131,25 @@ HARD RULES:
 - If you cannot read something at all, use null and describe it in
   `unreadable_regions`. Do not fill gaps with what is "usually" prescribed.
 - Do NOT add advice, diagnosis, or medicines that are not written on the page.
+- Treat patient history, symptoms, examination notes, letterhead and old medicine
+  lists as context, NOT as active prescribed medicines. A medicine belongs in
+  `medicines` only when the page actively instructs the patient to take/use it.
+- Printed clinic footers, doctor specialty/contact lines and signature captions are
+  not patient advice. Do not copy them into `advice`.
+- For `advice`, copy only text you can actually read. Do not translate, paraphrase or
+  complete a familiar-sounding sentence. Put uncertain lines in `unreadable_regions`.
+- When several attached images overlap, they are views of one page. Reconcile spellings
+  using the clearest view and emit every medicine only once.
 - `generic` may be inferred from a Bangladeshi brand name you recognise; if you are not
   sure, set it to null rather than guessing.
 - Output ONLY a single JSON object. No markdown fences, no commentary before or after.
 """
 
 
-def extraction_prompt(extra_context: str | None = None) -> str:
+def extraction_prompt(
+    extra_context: str | None = None,
+    include_example: bool = True,
+) -> str:
     """Few-shot multimodal prompt: prescription image → strict JSON.
 
     Pair with ``gemma_client.generate(prompt, image=..., json_mode=True)``.
@@ -152,11 +164,16 @@ def extraction_prompt(extra_context: str | None = None) -> str:
         f"\n{DOSE_PATTERN_NOTE}",
         "\nOUTPUT SCHEMA (shape, not values):",
         json.dumps(EXTRACTION_SCHEMA, indent=2, ensure_ascii=False),
-        "\nEXAMPLE — prescription text:",
-        _FEW_SHOT_EXAMPLE_INPUT,
-        "\nEXAMPLE — correct JSON output:",
-        json.dumps(_FEW_SHOT_EXAMPLE_OUTPUT, indent=2, ensure_ascii=False),
     ]
+    if include_example:
+        parts.extend(
+            [
+                "\nEXAMPLE — prescription text:",
+                _FEW_SHOT_EXAMPLE_INPUT,
+                "\nEXAMPLE — correct JSON output:",
+                json.dumps(_FEW_SHOT_EXAMPLE_OUTPUT, indent=2, ensure_ascii=False),
+            ]
+        )
     if extra_context:
         parts.append(f"\nADDITIONAL CONTEXT:\n{extra_context}")
     parts.append(

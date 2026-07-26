@@ -22,6 +22,7 @@ env/
 *.sqlite3
 data/uploads/
 data/audio/
+Test_prescription/
 
 # --- os / editor ---
 .DS_Store
