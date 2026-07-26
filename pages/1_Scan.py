@@ -57,41 +57,29 @@ if image_bytes:
     st.image(image_bytes, caption="নির্বাচিত ছবি", width="stretch")
 
     if st.button("🔍 পড়া শুরু করুন", type="primary", width="stretch"):
-        with st.spinner("Gemma প্রেসক্রিপশন পড়ছে… একটু সময় লাগতে পারে"):
-            # TODO: replace this guard with the real call once ocr_pipeline is done:
-            #     processed = ocr_pipeline.preprocess(image_bytes)
-            #     prescription = ocr_pipeline.extract_prescription(processed)
-            #     st.session_state[SS_IMAGE_BYTES] = processed
-            #     st.session_state[SS_PRESCRIPTION] = prescription
-            #     st.session_state[SS_READ_ONLY] = False
-            #     st.switch_page("pages/2_Result.py")
-            # extract_prescription must return a Prescription with `.error` set rather
-            # than raising, so this page only ever has to render, never rescue.
-            try:
-                import ocr_pipeline
+        # The 31B model takes ~30-60s on a full prescription, so say so rather than
+        # leaving the user staring at a bare spinner.
+        with st.spinner("Gemma প্রেসক্রিপশন পড়ছে… ৩০-৬০ সেকেন্ড লাগতে পারে, অপেক্ষা করুন"):
+            import ocr_pipeline
 
-                processed = ocr_pipeline.preprocess(image_bytes)
-                prescription = ocr_pipeline.extract_prescription(processed)
-                st.session_state[SS_IMAGE_BYTES] = processed
-                st.session_state[SS_PRESCRIPTION] = prescription
-                st.session_state[SS_READ_ONLY] = False
-                st.switch_page("pages/2_Result.py")
-            except NotImplementedError:
-                st.warning(
-                    "⏳ এক্সট্রাকশন এখনো তৈরি হয়নি (scaffold)। "
-                    "`ocr_pipeline.preprocess` ও `extract_prescription` ইমপ্লিমেন্ট করা বাকি।",
-                    icon="🚧",
-                )
+            # extract_prescription returns a Prescription with `.error` set rather than
+            # raising, so this page only ever has to render — never rescue.
+            processed = ocr_pipeline.preprocess(image_bytes)
+            prescription = ocr_pipeline.extract_prescription(processed)
+
+        st.session_state[SS_IMAGE_BYTES] = processed
+        st.session_state[SS_PRESCRIPTION] = prescription
+        st.session_state[SS_READ_ONLY] = False
+        st.switch_page("pages/2_Result.py")
 
 st.divider()
 with st.expander("🚧 এই পেজে যা এখনো বাকি (dev notes)"):
     st.markdown(
         """
-- `ocr_pipeline.preprocess` — PIL: EXIF rotate, downscale, autocontrast, JPEG re-encode.
-- `ocr_pipeline.extract_prescription` — one `gemma_client.generate` call, `json_mode=True`.
+- ✅ `ocr_pipeline.preprocess` + `extract_prescription` implemented and tested E2E.
 - Save the upload to `data/uploads/` (git-ignored) and keep the path for history.
-- Show `gemma_client.get_cached_success()` as a "last successful scan" escape hatch if
-  the model call fails mid-demo (RULES.md #12).
 - Multi-page prescriptions: allow 2+ images in one scan session.
+- Extraction takes ~30-60s on the 31B model. Consider showing a progress placeholder,
+  or trying the 26b-a4b variant first for speed and escalating only on low confidence.
 """
     )

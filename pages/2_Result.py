@@ -13,9 +13,12 @@ STATUS: scaffold. Section shells render today; each is marked TODO.
 
 from __future__ import annotations
 
+import pandas as pd
 import streamlit as st
 
 import config
+import gemma_client
+import ocr_pipeline
 from app import (
     SS_EXPLANATIONS,
     SS_PRESCRIPTION,
@@ -40,14 +43,101 @@ if prescription is None:
 if read_only:
     st.caption("🔒 হিস্ট্রি থেকে দেখা হচ্ছে (read-only)")
 
+# --- Model failure: show the cached last-good result rather than a blank screen -----
+if not prescription.ok:
+    st.error(prescription.error.get("message", "প্রেসক্রিপশন পড়া যায়নি।"), icon="⚠️")
+    if prescription.error.get("detail"):
+        with st.expander("বিস্তারিত (dev)"):
+            st.code(str(prescription.error))
+    col_a, col_b = st.columns(2)
+    with col_a:
+        if st.button("🔄 আবার চেষ্টা করুন", type="primary", width="stretch"):
+            st.switch_page("pages/1_Scan.py")
+    with col_b:
+        cached = gemma_client.get_cached_success("extraction")
+        if cached and st.button("📄 আগের সফল ফলাফল দেখুন", width="stretch"):
+            st.session_state[SS_PRESCRIPTION] = ocr_pipeline.parse_extraction(cached["text"])
+            st.rerun()
+    st.stop()
+
 # --- (a) Extracted medicines --------------------------------------------------------
 st.header("💊 ওষুধের তালিকা")
-# TODO: render prescription.medicines as a table.
-#   - columns: ওষুধ (display_name) | শক্তি | কখন (dose_pattern) | কতদিন | নিশ্চয়তা
-#   - rows where Medicine.is_low_confidence: highlight + config.VERIFY_WITH_PHARMACIST_BN
-#     (RULES.md #3 — never render an uncertain item as if it were certain)
-#   - show prescription.unreadable_regions if non-empty
-st.info("🚧 TODO: medicines table (see `ocr_pipeline.Medicine`).", icon="🚧")
+
+low_conf = [m for m in prescription.medicines if m.is_low_confidence]
+
+c1, c2, c3 = st.columns(3)
+c1.metric("ওষুধ", len(prescription.medicines))
+c2.metric("সামগ্রিক নিশ্চয়তা", f"{prescription.overall_confidence * 100:.0f}%")
+c3.metric("যাচাই দরকার", len(low_conf))
+
+_FOOD_BN = {
+    "before_food": "খাবারের আগে",
+    "after_food": "খাবারের পরে",
+    "with_food": "খাবারের সাথে",
+}
+
+rows = []
+for m in prescription.medicines:
+    rows.append(
+        {
+            "ওষুধ": m.display_name,
+            "শক্তি": m.strength or "—",
+            "কখন": m.dose_pattern or m.frequency or "—",
+            "খাবার": _FOOD_BN.get(m.food_timing or "", "—"),
+            "কতদিন": m.duration or "—",
+            "নিশ্চয়তা": f"{m.confidence * 100:.0f}%",
+            "": "⚠️" if m.is_low_confidence else "✅",
+        }
+    )
+
+st.dataframe(
+    pd.DataFrame(rows),
+    hide_index=True,
+    width="stretch",
+    column_config={"": st.column_config.TextColumn(width="small")},
+)
+
+# RULES.md #3 — uncertain items are never presented as if they were certain.
+if low_conf:
+    st.warning(
+        f"**{len(low_conf)}টি ওষুধের লেখা স্পষ্ট বোঝা যায়নি:** "
+        + ", ".join(m.display_name for m in low_conf)
+        + f"\n\n{config.VERIFY_WITH_PHARMACIST_BN}"
+    )
+
+if prescription.unreadable_regions:
+    st.warning(
+        "**কিছু অংশ পড়া যায়নি:**\n"
+        + "\n".join(f"- {r}" for r in prescription.unreadable_regions)
+        + f"\n\n{config.VERIFY_WITH_PHARMACIST_BN}"
+    )
+
+if prescription.red_flags:
+    st.error(
+        "**জরুরি লক্ষণ লেখা আছে:**\n"
+        + "\n".join(f"- {r}" for r in prescription.red_flags)
+        + "\n\nদ্রুত ডাক্তারের সাথে যোগাযোগ করুন।",
+        icon="🚨",
+    )
+
+col_t, col_a = st.columns(2)
+with col_t:
+    if prescription.tests:
+        st.subheader("🧪 পরীক্ষা")
+        for t in prescription.tests:
+            st.markdown(f"- {t}")
+with col_a:
+    if prescription.advice:
+        st.subheader("📌 উপদেশ")
+        for a in prescription.advice:
+            st.markdown(f"- {a}")
+
+if prescription.follow_up:
+    st.info(f"📅 **পরবর্তী সাক্ষাৎ:** {prescription.follow_up}")
+
+with st.expander("🔬 মডেল যা ফেরত দিয়েছে (dev)"):
+    st.caption(f"{prescription.model_source} · `{prescription.model_id}`")
+    st.code(prescription.raw_response[:4000] or "(empty)", language="json")
 
 # --- (b) Bangla explanation ---------------------------------------------------------
 st.header("📖 প্রতিটি ওষুধ সম্পর্কে")

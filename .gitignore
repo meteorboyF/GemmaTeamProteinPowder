@@ -23,6 +23,14 @@ env/
 data/uploads/
 data/audio/
 
+# Real prescription photos must NEVER be committed — they carry patient and doctor
+# PII (names, phone numbers, dates). Test locally from these paths; anything that
+# ships in the repo or the demo must be synthetic (see scripts that build sample Rx).
+Prescription pic/
+prescriptions/
+samples/real/
+*_real_rx.*
+
 # --- os / editor ---
 .DS_Store
 Thumbs.db
@@ -33,4 +41,5 @@ Thumbs.db
 .streamlit/secrets.toml
 
 # --- local tooling state (machine-specific, not project config) ---
-.claude/settings.local.json
+# Trailing * also catches the .tmp.NNN.hash files the editor writes alongside it.
+.claude/settings.local.json*
