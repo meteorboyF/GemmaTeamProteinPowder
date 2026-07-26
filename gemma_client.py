@@ -7,7 +7,7 @@ Fallback chain (RULES.md #9), transparent to callers:
 
 1. ``gemma-4-31b-it`` via the Gemini API (best handwriting OCR).
 2. On 429 / rate-limit / timeout → exponential-backoff retry, 3 attempts (tenacity).
-3. On continued failure → downgrade to ``gemma-4-12b-it`` on the same API.
+3. On continued failure → downgrade to ``gemma-4-26b-a4b-it`` on the same API.
 4. On total API failure or no internet → local Ollama running ``gemma4:12b``.
 5. If everything fails → a **structured error string**, never an exception. The UI
    must never crash on model failure.
@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 # Status vocabulary — these exact strings are what the UI badge renders.
 # --------------------------------------------------------------------------------
 SOURCE_CLOUD_PRIMARY = "cloud 31B"
-SOURCE_CLOUD_FALLBACK = "cloud 12B"
+SOURCE_CLOUD_FALLBACK = "cloud fallback"
 SOURCE_LOCAL = "local"
 SOURCE_NONE = "unavailable"
 

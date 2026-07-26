@@ -8,7 +8,8 @@ Renders, in order:
   (e) safety warnings panel
 plus a save-to-history button. Opens read-only when reached from History.
 
-STATUS: scaffold. Section shells render today; each is marked TODO.
+All patient-facing sections degrade independently so a network failure cannot remove
+the deterministic table, timetable, or safety panel.
 """
 
 from __future__ import annotations
@@ -17,12 +18,16 @@ import pandas as pd
 import streamlit as st
 
 import config
+import db
 import explain
 import gemma_client
 import ocr_pipeline
 import prompts
+import safety
+import tts
 from app import (
     SS_EXPLANATIONS,
+    SS_HISTORY_ID,
     SS_PRESCRIPTION,
     SS_READ_ONLY,
     SS_SCHEDULES,
@@ -30,8 +35,13 @@ from app import (
     render_page_header,
 )
 
-st.set_page_config(page_title="ফলাফল · Oushudh Bondhu", page_icon="📋", layout="wide")
-render_page_header("📋 আপনার প্রেসক্রিপশন — সহজ বাংলায়")
+st.set_page_config(
+    page_title="ফলাফল · Oushudh Bondhu",
+    page_icon="📋",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+render_page_header("আপনার প্রেসক্রিপশন", "যা লেখা আছে—সহজ বাংলা, সময়সূচি ও নিরাপত্তা যাচাইসহ")
 
 prescription = st.session_state.get(SS_PRESCRIPTION)
 read_only = st.session_state.get(SS_READ_ONLY, False)
@@ -43,12 +53,14 @@ if prescription is None:
     st.stop()
 
 if read_only:
-    st.caption("🔒 হিস্ট্রি থেকে দেখা হচ্ছে (read-only)")
+    st.info("এই ফলাফলটি আপনার ডিভাইসের হিস্ট্রি থেকে খোলা হয়েছে।", icon="🔒")
+else:
+    st.caption("ধাপ ২/৩ · ফলাফল যাচাই করুন, তারপর চাইলে সেভ করুন")
 
 # --- Model failure: show the cached last-good result rather than a blank screen -----
 if not prescription.ok:
     st.error(prescription.error.get("message", "প্রেসক্রিপশন পড়া যায়নি।"), icon="⚠️")
-    if prescription.error.get("detail"):
+    if config.DEBUG and prescription.error.get("detail"):
         with st.expander("বিস্তারিত (dev)"):
             st.code(str(prescription.error))
     col_a, col_b = st.columns(2)
@@ -62,17 +74,47 @@ if not prescription.ok:
             st.rerun()
     st.stop()
 
-# --- (a) Extracted medicines --------------------------------------------------------
-st.header("💊 ওষুধের তালিকা")
-
 low_conf = [m for m in prescription.medicines if m.is_low_confidence]
+schedules = explain.build_timetable(prescription)
+st.session_state[SS_SCHEDULES] = schedules
+history_medicines = []
+if config.ENABLE_HISTORY:
+    try:
+        exclude_id = st.session_state.get(SS_HISTORY_ID) if read_only else None
+        history_medicines = db.get_active_medicines(exclude_prescription_id=exclude_id)
+    except Exception:
+        history_medicines = []
+warnings = safety.run_all_checks(prescription, history=history_medicines)
+st.session_state[SS_WARNINGS] = warnings
+high_warnings = [warning for warning in warnings if warning.severity == safety.Severity.HIGH]
 
-c1, c2, c3 = st.columns(3)
+c1, c2, c3, c4 = st.columns(4)
 c1.metric("ওষুধ", len(prescription.medicines))
 c2.metric("সামগ্রিক নিশ্চয়তা", f"{prescription.overall_confidence * 100:.0f}%")
 c3.metric("যাচাই দরকার", len(low_conf))
+c4.metric("নিরাপত্তা সংকেত", len(warnings))
 
-schedules = explain.build_timetable(prescription)
+if high_warnings:
+    st.error(
+        f"**{len(high_warnings)}টি গুরুত্বপূর্ণ সতর্কতা পাওয়া গেছে।** "
+        "নিচের নিরাপত্তা অংশটি ফার্মাসিস্টের সাথে মিলিয়ে নিন।",
+        icon="🚨",
+    )
+elif warnings:
+    st.warning(f"{len(warnings)}টি বিষয় ফার্মাসিস্টের সাথে মিলিয়ে দেখা দরকার।")
+else:
+    st.success("প্রাথমিক নিরাপত্তা যাচাই সম্পন্ন—পরিচিত কোনো সংকেত পাওয়া যায়নি।")
+
+top_action, top_history = st.columns(2)
+with top_action:
+    if st.button("📷 আরেকটি প্রেসক্রিপশন স্ক্যান করুন", width="stretch"):
+        st.switch_page("pages/1_Scan.py")
+with top_history:
+    if st.button("🕘 হিস্ট্রি দেখুন", width="stretch"):
+        st.switch_page("pages/3_History.py")
+
+# --- (a) Extracted medicines --------------------------------------------------------
+st.header("💊 ওষুধের তালিকা")
 
 rows = []
 for sched in schedules:
@@ -151,6 +193,18 @@ with col_t:
         st.subheader("🧪 পরীক্ষা")
         for t in prescription.tests:
             st.markdown(f"- {t}")
+        test_marker = tuple(prescription.tests)
+        if st.session_state.get("_test_prep_marker") != test_marker:
+            st.session_state["_test_prep_marker"] = test_marker
+            st.session_state.pop("_test_prep", None)
+        if config.has_api_key() and st.button("পরীক্ষার প্রস্তুতি জানুন"):
+            with st.spinner("প্রস্তুতির তথ্য তৈরি হচ্ছে…"):
+                st.session_state["_test_prep"] = explain.explain_test_preparation(
+                    prescription.tests
+                )
+        if st.session_state.get("_test_prep"):
+            for test, preparation in st.session_state["_test_prep"].items():
+                st.caption(f"**{test}:** {preparation}")
 with col_a:
     if prescription.advice:
         st.subheader("📌 উপদেশ")
@@ -160,15 +214,39 @@ with col_a:
 if prescription.follow_up:
     st.info(f"📅 **পরবর্তী সাক্ষাৎ:** {prescription.follow_up}")
 
-with st.expander("🔬 মডেল যা ফেরত দিয়েছে (dev)"):
-    st.caption(f"{prescription.model_source} · `{prescription.model_id}`")
-    st.code(prescription.raw_response[:4000] or "(empty)", language="json")
+if config.DEBUG:
+    with st.expander("🔬 মডেলের কাঁচা উত্তর"):
+        st.caption(f"{prescription.model_source} · `{prescription.model_id}`")
+        st.code(prescription.raw_response[:4000] or "(empty)", language="json")
 
 # --- (b) Bangla explanation ---------------------------------------------------------
 st.header("📖 প্রতিটি ওষুধ সম্পর্কে")
-# TODO: for each medicine, st.expander(display_name) with explain.Explanation fields:
-#   purpose_bn / how_to_take_bn / caution_bn. Populate st.session_state[SS_EXPLANATIONS].
-st.info("🚧 TODO: per-drug Bangla explanation (see `explain.explain_prescription`).", icon="🚧")
+if SS_EXPLANATIONS not in st.session_state:
+    st.session_state[SS_EXPLANATIONS] = explain.fallback_explanations(prescription)
+
+explanations = st.session_state[SS_EXPLANATIONS]
+if config.has_api_key():
+    st.caption("সাধারণ তথ্য এখনই দেখা যাচ্ছে। চাইলে Gemma একবারে সব ওষুধের সহজ ব্যাখ্যা তৈরি করবে।")
+    if st.button("✨ Gemma দিয়ে ব্যাখ্যা আরও সহজ করুন", width="stretch"):
+        with st.spinner("সহজ বাংলা ব্যাখ্যা তৈরি হচ্ছে…"):
+            explanations = explain.explain_prescription(prescription)
+            st.session_state[SS_EXPLANATIONS] = explanations
+else:
+    st.caption("API key না থাকায় CSV ও ডাক্তারের লেখা থেকে নিরাপদ সংক্ষিপ্ত ব্যাখ্যা দেখানো হচ্ছে।")
+
+for medicine in prescription.medicines:
+    explanation = explanations.get(medicine.display_name) or explain.fallback_explanations(
+        ocr_pipeline.Prescription(medicines=[medicine])
+    )[medicine.display_name]
+    with st.expander(
+        ("⚠️ " if explanation.is_uncertain else "💊 ") + medicine.display_name,
+        expanded=len(prescription.medicines) <= 3,
+    ):
+        st.markdown(f"**সাধারণত কেন দেওয়া হয়**  \n{explanation.purpose_bn}")
+        st.markdown(f"**কীভাবে খাবেন**  \n{explanation.how_to_take_bn}")
+        st.markdown(f"**খেয়াল রাখুন**  \n{explanation.caution_bn}")
+        if explanation.error:
+            st.caption("Gemma ব্যাখ্যা পাওয়া যায়নি—নিরাপদ সংক্ষিপ্ত তথ্য দেখানো হয়েছে।")
 
 # --- (c) Dose timetable -------------------------------------------------------------
 st.header("🕐 কখন কোন ওষুধ")
@@ -217,31 +295,89 @@ st.header("🔊 শুনুন")
 if not config.ENABLE_TTS:
     st.caption("TTS বন্ধ আছে (`ENABLE_TTS=0`).")
 else:
-    # TODO: explain.schedule_to_speech_text → tts.speak → st.audio(result.audio).
-    # On SpeechResult.error, show the text silently — never block the page on audio.
-    st.button("▶️ পড়ে শোনান", disabled=True, help="TODO: wire tts.speak")
+    speech_text = explain.schedule_to_speech_text(schedules)
+    if st.session_state.get("_speech_text") != speech_text:
+        st.session_state["_speech_text"] = speech_text
+        st.session_state.pop("_speech_audio", None)
+        st.session_state.pop("_speech_error", None)
+    if st.button("▶️ সময়সূচি পড়ে শোনান", width="stretch"):
+        with st.spinner("বাংলা অডিও তৈরি হচ্ছে…"):
+            speech = tts.speak(speech_text)
+            if speech.ok:
+                st.session_state["_speech_audio"] = speech.audio
+                st.session_state.pop("_speech_error", None)
+            else:
+                st.session_state["_speech_error"] = speech.error
+    if st.session_state.get("_speech_audio"):
+        st.audio(st.session_state["_speech_audio"], format="audio/mp3")
+    if st.session_state.get("_speech_error"):
+        st.warning(st.session_state["_speech_error"])
+        with st.expander("পড়ার লেখাটি দেখুন"):
+            st.write(speech_text)
+    st.caption("অডিওর জন্য ইন্টারনেট দরকার; তৈরি হলে এই ডিভাইসে ক্যাশ থাকে।")
 
 # --- (e) Safety warnings ------------------------------------------------------------
-st.header("⚠️ সতর্কতা")
-# TODO: safety.run_all_checks(prescription, history=db.get_active_medicines()).
-# Render HIGH first. Every card must show its provenance ("data/drugs_bd.csv") and be
-# phrased as advice to check with a pharmacist — never as an instruction to change or
-# stop a medicine (RULES.md #1, #4).
-st.info("🚧 TODO: safety panel (see `safety.run_all_checks`).", icon="🚧")
+st.header("🛡️ নিরাপত্তা যাচাই")
+if not warnings:
+    st.success(
+        "এই ছোট যাচাই তালিকায় একই উপাদান, পরিচিত মিথস্ক্রিয়া বা সর্বোচ্চ "
+        "দৈনিক পরিমাণের সতর্কতা পাওয়া যায়নি।"
+    )
+    st.caption("এটি পূর্ণাঙ্গ ওষুধ যাচাই নয়। সন্দেহ হলে ফার্মাসিস্টের সাথে মিলিয়ে নিন।")
+else:
+    for warning in warnings:
+        icon = "🚨" if warning.severity == safety.Severity.HIGH else "⚠️"
+        card = st.error if warning.severity == safety.Severity.HIGH else st.warning
+        names = ", ".join(warning.involved)
+        card(
+            f"**{warning.title_bn}**\n\n"
+            f"{warning.detail_bn}\n\n"
+            f"**যে ওষুধ:** {names}\n\n"
+            f"**তথ্যের উৎস:** `{warning.source}`",
+            icon=icon,
+        )
+
+st.caption(
+    "ওষুধের নিরাপত্তা তালিকাটি সীমিত ও এখনো ফার্মাসিস্ট-যাচাইকৃত নয়। "
+    "নিজে থেকে কোনো ওষুধ বন্ধ বা মাত্রা পরিবর্তন করবেন না।"
+)
 
 # --- Save ---------------------------------------------------------------------------
 st.divider()
-if not read_only:
-    # TODO: db.save_prescription(prescription, label=..., image_path=...)
-    st.button("💾 হিস্ট্রিতে সেভ করুন", disabled=True, help="TODO: wire db.save_prescription")
-
-with st.expander("🚧 dev notes"):
-    st.markdown(
-        """
-- Sections (a)-(e) above, in order.
-- Populate `SS_EXPLANATIONS`, `SS_SCHEDULES`, `SS_WARNINGS` so reruns don't re-call Gemma.
-- If `prescription.error` is set, show the cached last-good result
-  (`gemma_client.get_cached_success`) plus a retry button — never a stack trace.
-- Read-only mode (from History) hides the save button and the retry action.
-"""
-    )
+st.header("সেভ ও শেয়ার")
+share_col, save_col = st.columns(2)
+with share_col:
+    with st.container(border=True):
+        st.subheader("পরিবারের জন্য সারাংশ")
+        st.caption("ছবি বা ব্যক্তিগত যোগাযোগের তথ্য ছাড়া বাংলা টেক্সট।")
+        st.download_button(
+            "⬇️ বাংলা সারাংশ ডাউনলোড করুন",
+            data=explain.prescription_share_text(prescription, schedules).encode("utf-8"),
+            file_name="oushudh-bondhu-summary.txt",
+            mime="text/plain",
+            width="stretch",
+        )
+with save_col:
+    with st.container(border=True):
+        if not read_only:
+            st.subheader("এই ডিভাইসে রাখুন")
+            st.caption("SQLite হিস্ট্রি শুধু এই ডিভাইসেই থাকবে।")
+            label = st.text_input(
+                "একটি নাম দিন (ঐচ্ছিক)",
+                placeholder="যেমন: জ্বরের প্রেসক্রিপশন",
+                max_chars=120,
+            )
+            if st.button("💾 হিস্ট্রিতে সেভ করুন", type="primary", width="stretch"):
+                try:
+                    saved_id = db.save_prescription(prescription, label=label)
+                    st.session_state[SS_HISTORY_ID] = saved_id
+                    st.session_state[SS_READ_ONLY] = True
+                    st.toast("প্রেসক্রিপশনটি সেভ হয়েছে", icon="✅")
+                    st.rerun()
+                except Exception:
+                    st.error("এই মুহূর্তে সেভ করা যায়নি। আবার চেষ্টা করুন।")
+        else:
+            st.subheader("হিস্ট্রিতে সেভ করা")
+            st.caption("এই ফলাফলটি ইতিমধ্যে আপনার ডিভাইসে আছে।")
+            if st.button("🕘 সব হিস্ট্রি দেখুন", width="stretch"):
+                st.switch_page("pages/3_History.py")
