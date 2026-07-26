@@ -60,6 +60,11 @@ OLLAMA_HOST: str = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 # --------------------------------------------------------------------------------
 # Retry / backoff  (fallback chain step 2)
 # --------------------------------------------------------------------------------
+# Greedy decoding. Transcribing a prescription is not a creative task: the same image
+# must yield the same medicines every time, or the app is not trustworthy. Sampling was
+# observed to change extracted advice lines between runs on an identical photo.
+TEMPERATURE: float = float(os.getenv("TEMPERATURE", "0.0"))
+
 RETRY_ATTEMPTS: int = int(os.getenv("RETRY_ATTEMPTS", "3"))
 RETRY_BACKOFF_BASE_SECONDS: float = float(os.getenv("RETRY_BACKOFF_BASE_SECONDS", "1.0"))
 RETRY_BACKOFF_MAX_SECONDS: float = float(os.getenv("RETRY_BACKOFF_MAX_SECONDS", "20.0"))

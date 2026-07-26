@@ -11,6 +11,7 @@ Two halves, deliberately separated:
 from __future__ import annotations
 
 import logging
+import json
 import re
 from dataclasses import dataclass, field
 from typing import Any
@@ -268,7 +269,10 @@ def build_schedule(medicine: Medicine) -> MedicineSchedule:
     )
 
     slots: list[DoseSlot] = []
-    if amounts and not as_needed:
+    # `as_needed` annotates, it does not erase. "BD PRN" means up to twice daily when
+    # needed, so the grid must still show those slots — otherwise the timetable
+    # silently contradicts the "দিনে দুইবার" in the medicines table.
+    if amounts:
         keys = list(config.DOSE_SLOTS)
         if len(amounts) == 3:
             # 3-part patterns are morning/noon/night — evening stays empty.
@@ -327,20 +331,195 @@ def schedule_to_speech_text(schedules: list[MedicineSchedule]) -> str:
 # --------------------------------------------------------------------------------
 # Model-generated prose (Layer 2)
 # --------------------------------------------------------------------------------
+def _fallback_explanation(medicine: Medicine, error: str | None = None) -> Explanation:
+    """Safe deterministic copy used when the model is unavailable or malformed."""
+    purpose = "এই ওষুধটি কেন দেওয়া হয়েছে, তা ডাক্তার বা ফার্মাসিস্টের কাছে জেনে নিন।"
+    try:
+        # Import lazily to avoid making deterministic timetable helpers depend on pandas.
+        import safety
+
+        row = safety._row_for(medicine)
+        if row is not None and str(row.get("common_use_bn", "")).strip():
+            purpose = str(row["common_use_bn"]).strip() + "।"
+    except Exception:
+        logger.debug("Could not resolve deterministic medicine purpose", exc_info=True)
+
+    timing = describe_timing_bn(medicine)
+    how = f"ডাক্তারের লেখা অনুযায়ী {timing}।"
+    if medicine.duration:
+        how += f" সময়কাল: {medicine.duration}।"
+    if medicine.is_low_confidence:
+        caution = (
+            "লেখাটি স্পষ্ট নয়। খাওয়ার আগে প্রেসক্রিপশন দেখিয়ে ফার্মাসিস্টের সাথে "
+            "মিলিয়ে নিন।"
+        )
+    else:
+        caution = "কোনো সমস্যা হলে ডাক্তার বা ফার্মাসিস্টের সাথে কথা বলুন।"
+    return Explanation(
+        purpose_bn=purpose,
+        how_to_take_bn=how,
+        caution_bn=caution,
+        schedule_sentence_bn=timing,
+        is_uncertain=medicine.is_low_confidence,
+        error=error,
+    )
+
+
+def _json_object(raw: str) -> dict[str, Any] | None:
+    if not raw or gemma_client.is_error(raw):
+        return None
+    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip(), flags=re.IGNORECASE)
+    start, end = text.find("{"), text.rfind("}")
+    if start >= 0 and end > start:
+        text = text[start : end + 1]
+    try:
+        value = json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def _medicine_record(medicine: Medicine, index: int = 0) -> dict[str, Any]:
+    return {
+        "index": index,
+        "brand": medicine.brand,
+        "generic": medicine.generic,
+        "strength": medicine.strength,
+        "dose_pattern": medicine.dose_pattern,
+        "frequency": medicine.frequency,
+        "food_timing": medicine.food_timing,
+        "duration": medicine.duration,
+        "uncertain": medicine.is_low_confidence,
+    }
+
+
+def _coerce_explanation(data: Any, medicine: Medicine) -> Explanation | None:
+    if not isinstance(data, dict):
+        return None
+    required = ("purpose_bn", "caution_bn")
+    if not all(isinstance(data.get(key), str) and data[key].strip() for key in required):
+        return None
+    # Timing stays deterministic so prose, grid, and audio cannot disagree.
+    fallback = _fallback_explanation(medicine)
+    caution = data["caution_bn"].strip()
+    if "ডাক্তার" not in caution and "ফার্মাসিস্ট" not in caution:
+        caution += " ডাক্তার বা ফার্মাসিস্টের সাথে কথা বলুন।"
+    if medicine.is_low_confidence:
+        caution = fallback.caution_bn
+    return Explanation(
+        purpose_bn=data["purpose_bn"].strip(),
+        how_to_take_bn=fallback.how_to_take_bn,
+        caution_bn=caution,
+        schedule_sentence_bn=fallback.schedule_sentence_bn,
+        is_uncertain=medicine.is_low_confidence,
+    )
+
+
 def explain_medicine(medicine: Medicine) -> Explanation:
     """Generate the Bangla explanation for one medicine via Gemma.
 
-    TODO: implement — call gemma_client.generate(prompts.explanation_prompt(...)),
-    parse defensively, and return an Explanation with `error` set on failure so the
-    Result page can still show the table and the timetable.
+    Calls Gemma once and degrades to CSV-grounded/deterministic copy on failure.
     """
-    raise NotImplementedError("TODO: wire explanation prompt -> gemma_client")
+    raw = gemma_client.generate(
+        prompts.explanation_prompt(_medicine_record(medicine)), json_mode=True
+    )
+    parsed = _json_object(raw)
+    result = _coerce_explanation(parsed, medicine)
+    if result is not None:
+        return result
+    error = gemma_client.parse_error(raw)
+    reason = error.get("message", "malformed explanation") if error else "malformed explanation"
+    return _fallback_explanation(medicine, error=reason)
 
 
 def explain_prescription(prescription: Prescription) -> dict[str, Explanation]:
     """Explain every medicine, keyed by ``Medicine.display_name``.
 
-    TODO: implement. Consider one batched call over all medicines instead of N calls —
-    materially kinder to the free-tier rate limit during a live demo.
+    Uses one batched call rather than one request per medicine. A missing/malformed
+    item falls back independently, so one bad record never blanks the section.
     """
-    raise NotImplementedError("TODO: batch explanation")
+    if not prescription.medicines:
+        return {}
+    records = [_medicine_record(medicine, index) for index, medicine in enumerate(prescription.medicines)]
+    raw = gemma_client.generate(prompts.explanation_batch_prompt(records), json_mode=True)
+    payload = _json_object(raw)
+    items = payload.get("medicines", []) if payload else []
+    by_index: dict[int, Any] = {}
+    if isinstance(items, list):
+        for position, item in enumerate(items):
+            if not isinstance(item, dict):
+                continue
+            try:
+                index = int(item.get("index", position))
+            except (TypeError, ValueError):
+                index = position
+            by_index[index] = item
+
+    output: dict[str, Explanation] = {}
+    model_error = gemma_client.parse_error(raw)
+    for index, medicine in enumerate(prescription.medicines):
+        result = _coerce_explanation(by_index.get(index), medicine)
+        if result is None:
+            reason = (
+                model_error.get("message", "model explanation unavailable")
+                if model_error
+                else "missing or malformed model item"
+            )
+            result = _fallback_explanation(medicine, error=reason)
+        output[medicine.display_name] = result
+    return output
+
+
+def fallback_explanations(prescription: Prescription) -> dict[str, Explanation]:
+    """Instant explanations for the UI before/without an optional model call."""
+    return {
+        medicine.display_name: _fallback_explanation(medicine)
+        for medicine in prescription.medicines
+    }
+
+
+def explain_test_preparation(tests: list[str]) -> dict[str, str]:
+    """Optional Gemma preparation notes for tests already present on the prescription."""
+    clean = [test.strip() for test in tests if isinstance(test, str) and test.strip()]
+    fallback = {
+        test: "প্রস্তুতির নিয়ম পরীক্ষাগারভেদে বদলাতে পারে। পরীক্ষার আগে ল্যাবে জেনে নিন।"
+        for test in clean
+    }
+    if not clean:
+        return {}
+    raw = gemma_client.generate(prompts.test_prep_prompt(clean), json_mode=True)
+    payload = _json_object(raw)
+    items = payload.get("tests", []) if payload else []
+    if not isinstance(items, list):
+        return fallback
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name", "")).strip()
+        preparation = str(item.get("preparation_bn", "")).strip()
+        # Only attach output to a test that was actually in the prescription.
+        match = next((test for test in clean if test.casefold() == name.casefold()), None)
+        if match and preparation:
+            fallback[match] = preparation
+    return fallback
+
+
+def prescription_share_text(
+    prescription: Prescription, schedules: list[MedicineSchedule] | None = None
+) -> str:
+    """Plain-text caregiver handoff derived from the same deterministic schedule."""
+    schedules = schedules or build_timetable(prescription)
+    lines = ["ওষুধ বন্ধু — প্রেসক্রিপশন সারাংশ", "", config.DISCLAIMER_BN, ""]
+    for schedule in schedules:
+        medicine = schedule.medicine
+        lines.append(f"• {medicine.display_name} {medicine.strength or ''}".strip())
+        lines.append(f"  কখন: {schedule.timing_bn}")
+        if medicine.duration:
+            lines.append(f"  সময়কাল: {medicine.duration}")
+        if medicine.is_low_confidence:
+            lines.append("  ⚠️ লেখাটি ফার্মাসিস্টের সাথে মিলিয়ে নিন")
+    if prescription.tests:
+        lines.extend(["", "পরীক্ষা:", *[f"• {test}" for test in prescription.tests]])
+    if prescription.follow_up:
+        lines.extend(["", f"পরবর্তী সাক্ষাৎ: {prescription.follow_up}"])
+    return "\n".join(lines)

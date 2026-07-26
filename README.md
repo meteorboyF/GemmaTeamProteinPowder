@@ -16,19 +16,19 @@ medicine in **plain Bangla** → builds a **dose timetable** and reads it aloud 
 
 ---
 
-## Status: scaffold
+## Status: functional prototype
 
-The repo structure, docs, config and the **full Gemma fallback client** are done.
-Feature modules are stubs with typed signatures and TODOs — the app runs, the pages
-render, nothing hallucinates yet.
+The full patient flow is implemented: upload/camera extraction, deterministic shorthand
+decoding and timetable, optional batched Bangla explanations, audio, grounded safety
+checks, local history, cross-prescription checks, and caregiver text export.
 
 | Module | State |
 |---|---|
 | `gemma_client.py` | ✅ implemented — full fallback chain |
 | `config.py`, `prompts.py` | ✅ implemented |
 | `data/drugs_bd.csv` | ⚠️ seeded, **needs pharmacist review** |
-| `app.py`, `pages/*` | 🟡 UI shell runs, sections TODO |
-| `ocr_pipeline.py`, `explain.py`, `safety.py`, `tts.py`, `db.py` | 🚧 stubs |
+| `app.py`, `pages/*` | ✅ complete patient flow |
+| `ocr_pipeline.py`, `explain.py`, `safety.py`, `tts.py`, `db.py` | ✅ implemented |
 
 ## Quick start
 
@@ -52,7 +52,8 @@ ollama pull gemma4:12b       # ⚠️ verify this tag — see SPEC.md assumption
 ```
 
 With a local daemon running, the app keeps working with no internet and the status
-badge switches to **🔵 local**.
+badge switches to **🔵 local**. The configured tag is still unverified on this machine;
+do not claim offline support in a demo until `ollama list` confirms it.
 
 ## How the model is wired
 
@@ -71,7 +72,7 @@ gemma-4-31b-it      ──429/timeout──►  3× exponential backoff
 gemma-4-26b-a4b-it  ──failing──►  local Ollama gemma4:12b  ──failing──►  structured error
 ```
 
-The active target (`cloud 31B` / `cloud 12B` / `local`) is exposed via
+The active target (`cloud 31B` / dynamically named fallback / `local`) is exposed via
 `gemma_client.get_status()` and rendered as a badge in the sidebar. The last successful
 result is cached in session so a live-demo rate-limit can't blank the screen.
 
@@ -111,7 +112,7 @@ Worth stating plainly, because it shapes the design:
 - **No real patient data in this repo.** Sample prescriptions must be synthetic; the
   SQLite history is demo-local and git-ignored (RULES.md #6).
 
-## Known gaps before demo day
+## Verified limitations before demo day
 
 1. ~~Verify the cloud model IDs~~ — ✅ done 2026-07-26. `gemma-4-31b-it` (primary) and
    `gemma-4-26b-a4b-it` (fallback) both confirmed present on the free tier;

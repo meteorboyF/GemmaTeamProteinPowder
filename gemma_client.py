@@ -7,7 +7,7 @@ Fallback chain (RULES.md #9), transparent to callers:
 
 1. ``gemma-4-31b-it`` via the Gemini API (best handwriting OCR).
 2. On 429 / rate-limit / timeout → exponential-backoff retry, 3 attempts (tenacity).
-3. On continued failure → downgrade to ``gemma-4-12b-it`` on the same API.
+3. On continued failure → downgrade to ``gemma-4-26b-a4b-it`` on the same API.
 4. On total API failure or no internet → local Ollama running ``gemma4:12b``.
 5. If everything fails → a **structured error string**, never an exception. The UI
    must never crash on model failure.
@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import threading
 import time
 from dataclasses import asdict, dataclass, field
@@ -42,7 +43,7 @@ logger = logging.getLogger(__name__)
 # Status vocabulary — these exact strings are what the UI badge renders.
 # --------------------------------------------------------------------------------
 SOURCE_CLOUD_PRIMARY = "cloud 31B"
-SOURCE_CLOUD_FALLBACK = "cloud 12B"
+SOURCE_CLOUD_FALLBACK = "cloud fallback"
 SOURCE_LOCAL = "local"
 SOURCE_NONE = "unavailable"
 
@@ -52,6 +53,21 @@ _SOURCE_BADGES = {
     SOURCE_LOCAL: "🔵",
     SOURCE_NONE: "🔴",
 }
+
+_SIZE_RE = re.compile(r"-(\d+b(?:-a\d+b)?)-", re.IGNORECASE)
+
+
+def _cloud_label(model_id: str, slot: str) -> str:
+    """Badge text for a cloud model, derived from the actual model ID.
+
+    The slot constants say "31B"/"26B", but the model IDs are configurable — so
+    deriving the label from what really answered stops the badge claiming "cloud 31B"
+    while a different model did the work.
+    """
+    match = _SIZE_RE.search(model_id or "")
+    if match:
+        return f"cloud {match.group(1).upper().replace('-A', '-a')}"
+    return slot
 
 
 class ModelError(Exception):
@@ -78,8 +94,11 @@ class ModelStatus:
 
     def badge(self) -> str:
         icon = _SOURCE_BADGES.get(self.source, "⚪")
-        label = self.source if self.source != SOURCE_NONE else "no model"
-        return f"{icon} {label}"
+        if self.source == SOURCE_NONE:
+            return f"{icon} no model"
+        if self.source in (SOURCE_CLOUD_PRIMARY, SOURCE_CLOUD_FALLBACK):
+            return f"{icon} {_cloud_label(self.model_id, self.source)}"
+        return f"{icon} {self.source}"
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -279,14 +298,14 @@ def _call_cloud(model_id: str, prompt: str, image: bytes | None, json_mode: bool
         parts.append(types.Part.from_bytes(data=image, mime_type=_guess_mime(image)))
 
     def _do(use_json: bool) -> Any:
-        kwargs: dict[str, Any] = {}
+        # temperature=0 for reproducibility — see config.TEMPERATURE.
+        kwargs: dict[str, Any] = {"temperature": config.TEMPERATURE}
         if use_json:
             kwargs["response_mime_type"] = "application/json"
-        cfg = types.GenerateContentConfig(**kwargs) if kwargs else None
         return client.models.generate_content(
             model=model_id,
             contents=[types.Content(role="user", parts=parts)],
-            config=cfg,
+            config=types.GenerateContentConfig(**kwargs),
         )
 
     want_json = json_mode and _json_mode_supported is not False

@@ -122,7 +122,7 @@ conversation.
    `gemma4:12b` (tag is a config constant — `config.OLLAMA_MODEL`).
 5. If everything fails: **return a structured error, never crash the UI.**
 
-The **active model + source** (`"cloud 31B"` / `"cloud 12B"` / `"local"`) is exposed via
+The **active model + source** (primary cloud / dynamically named fallback / local) is exposed via
 `gemma_client.get_status()` so the UI can show a status badge. This doubles as the
 offline-capable story. The **last successful extraction is cached in session**
 (`gemma_client.get_cached_success()`) so a live-demo rate-limit does not wipe the

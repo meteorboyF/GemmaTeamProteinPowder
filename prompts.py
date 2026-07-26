@@ -232,10 +232,44 @@ def explanation_prompt(medicine: dict[str, Any]) -> str:
     )
 
 
+def explanation_batch_prompt(medicines: list[dict[str, Any]]) -> str:
+    """One free-tier-friendly request for all medicines in a prescription."""
+    output_schema = {
+        "medicines": [
+            {
+                "index": "integer copied from the input record",
+                **EXPLANATION_SCHEMA,
+            }
+        ]
+    }
+    return "\n".join(
+        [
+            EXPLANATION_SYSTEM_RULES,
+            "\nExplain every record. Preserve each input index exactly.",
+            "\nOUTPUT SCHEMA:",
+            json.dumps(output_schema, indent=2, ensure_ascii=False),
+            "\nMEDICINE RECORDS:",
+            json.dumps(medicines, indent=2, ensure_ascii=False),
+            "\nReturn one JSON object only.",
+        ]
+    )
+
+
 def test_prep_prompt(tests: list[str]) -> str:
     """Prompt: lab test names → simple Bangla prep instructions (Layer 5).
 
-    TODO: implement. Must stay descriptive (fasting/timing/what to bring) and must not
-    interpret results or suggest additional tests.
+    Stays descriptive (fasting/timing/what to bring) and must not interpret results or
+    suggest additional tests.
     """
-    raise NotImplementedError("TODO: test-prep prompt (Layer 5)")
+    return "\n".join(
+        [
+            "You explain preparation for tests already written on a prescription.",
+            "Use very simple Bangla. Do not interpret results, diagnose, recommend "
+            "another test, or override the doctor. If preparation depends on the lab "
+            "or is uncertain, say to confirm with that lab.",
+            'Return JSON only: {"tests":[{"name":"copied test name",'
+            '"preparation_bn":"short preparation instruction"}]}.',
+            "TESTS:",
+            json.dumps(tests, ensure_ascii=False),
+        ]
+    )
