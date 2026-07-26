@@ -190,10 +190,13 @@ else:
 
 for sched in schedules:
     if sched.as_needed:
-        st.caption(
-            f"🔸 **{sched.medicine.display_name}** — নির্দিষ্ট সময় নেই, "
-            f"{prompts.SHORTHAND['SOS']['bn']}।"
+        # Only claim "no fixed time" when there genuinely are no slots.
+        note = (
+            f"ছকের সময় অনুযায়ী, তবে {prompts.SHORTHAND['SOS']['bn']}"
+            if sched.slots
+            else f"নির্দিষ্ট সময় নেই, {prompts.SHORTHAND['SOS']['bn']}"
         )
+        st.caption(f"🔸 **{sched.medicine.display_name}** — {note}।")
     if not sched.slots and not sched.as_needed:
         st.caption(
             f"🔸 **{sched.medicine.display_name}** — ডাক্তারের লেখা অনুযায়ী: "

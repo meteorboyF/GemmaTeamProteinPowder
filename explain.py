@@ -268,7 +268,10 @@ def build_schedule(medicine: Medicine) -> MedicineSchedule:
     )
 
     slots: list[DoseSlot] = []
-    if amounts and not as_needed:
+    # `as_needed` annotates, it does not erase. "BD PRN" means up to twice daily when
+    # needed, so the grid must still show those slots — otherwise the timetable
+    # silently contradicts the "দিনে দুইবার" in the medicines table.
+    if amounts:
         keys = list(config.DOSE_SLOTS)
         if len(amounts) == 3:
             # 3-part patterns are morning/noon/night — evening stays empty.
