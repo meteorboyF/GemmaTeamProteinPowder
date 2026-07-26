@@ -17,7 +17,8 @@
 7. Secrets only via .env (git-ignored). Ship .env.example. Never commit a key.
 8. ALL Gemma access goes through gemma_client.generate(). No SDK calls elsewhere.
 9. gemma_client must implement the full fallback chain: 31B -> backoff-retry ->
-   12B -> local Ollama -> structured error. UI must never crash on model failure.
+   26B A4B -> local 12B Ollama -> structured error. UI must never crash on model
+   failure.
 10. Extraction returns validated structured JSON. Parse defensively; malformed model
     output must degrade gracefully, not throw.
 11. Keep all prompts in prompts.py. Keep model IDs/config in config.py.

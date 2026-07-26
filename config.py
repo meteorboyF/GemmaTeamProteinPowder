@@ -43,13 +43,15 @@ def has_api_key() -> bool:
 
 
 # --------------------------------------------------------------------------------
-# Model IDs  (see SPEC.md "Assumptions" #2 — these are UNVERIFIED, confirm before demo)
+# Model IDs. The cloud primary has passed the synthetic multimodal validation flow.
 # --------------------------------------------------------------------------------
 GEMMA_PRIMARY_MODEL: str = os.getenv("GEMMA_PRIMARY_MODEL", "gemma-4-31b-it")
-GEMMA_FALLBACK_MODEL: str = os.getenv("GEMMA_FALLBACK_MODEL", "gemma-4-12b-it")
+GEMMA_FALLBACK_MODEL: str = os.getenv(
+    "GEMMA_FALLBACK_MODEL", "gemma-4-26b-a4b-it"
+)
 
-# Local Ollama fallback. TODO(verify): confirm the exact tag with `ollama list` /
-# `ollama pull gemma4:12b` on the demo machine and correct here if it differs.
+# Local Ollama fallback. The tag is published; pull and benchmark it on the demo
+# machine because availability and usable latency are machine-specific.
 OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "gemma4:12b")
 OLLAMA_HOST: str = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 
@@ -60,6 +62,9 @@ RETRY_ATTEMPTS: int = int(os.getenv("RETRY_ATTEMPTS", "3"))
 RETRY_BACKOFF_BASE_SECONDS: float = float(os.getenv("RETRY_BACKOFF_BASE_SECONDS", "1.0"))
 RETRY_BACKOFF_MAX_SECONDS: float = float(os.getenv("RETRY_BACKOFF_MAX_SECONDS", "20.0"))
 REQUEST_TIMEOUT_SECONDS: float = float(os.getenv("REQUEST_TIMEOUT_SECONDS", "90"))
+THINKING_BUDGET: int = int(os.getenv("THINKING_BUDGET", "0"))
+MAX_OUTPUT_TOKENS: int = int(os.getenv("MAX_OUTPUT_TOKENS", "4096"))
+MODEL_TEMPERATURE: float = float(os.getenv("MODEL_TEMPERATURE", "0.1"))
 
 # --------------------------------------------------------------------------------
 # Paths

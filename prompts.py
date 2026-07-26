@@ -142,9 +142,8 @@ def extraction_prompt(extra_context: str | None = None) -> str:
 
     Pair with ``gemma_client.generate(prompt, image=..., json_mode=True)``.
 
-    TODO: add 2-3 more few-shot pairs covering (a) a messy/partially illegible Rx so
-    the model practises low-confidence output, (b) a syrup with paediatric dosing,
-    (c) an Rx mixing Bangla and English handwriting.
+    Future evaluation should add reviewed examples for messy, paediatric and
+    Bangla/English mixed prescriptions.
     """
     parts = [
         EXTRACTION_SYSTEM_RULES,
@@ -196,9 +195,8 @@ EXPLANATION_SCHEMA: dict[str, Any] = {
 def explanation_prompt(medicine: dict[str, Any]) -> str:
     """Text-only prompt: one structured drug record → plain-Bangla explanation.
 
-    TODO: add few-shot Bangla examples once we have pharmacist-reviewed reference
-    wording — the register matters more than the content here, and unreviewed
-    model-authored Bangla is the wrong thing to freeze into few-shots.
+    Reviewed Bangla few-shots are intentionally absent until a pharmacist approves the
+    reference wording.
     """
     return "\n".join(
         [
@@ -212,10 +210,47 @@ def explanation_prompt(medicine: dict[str, Any]) -> str:
     )
 
 
+def prescription_explanation_prompt(medicines: list[dict[str, Any]]) -> str:
+    """One-call variant for several confident medicines.
+
+    `input_index` is echoed back so duplicate brands or reordered model output cannot
+    attach an explanation to the wrong row.
+    """
+    indexed = [
+        {"input_index": index, "medicine": medicine}
+        for index, medicine in enumerate(medicines)
+    ]
+    return "\n".join(
+        [
+            EXPLANATION_SYSTEM_RULES,
+            "\nExplain every medicine record independently.",
+            "Return one JSON object with an `explanations` array. Every array item must "
+            "contain the unchanged integer `input_index` plus these fields:",
+            json.dumps(EXPLANATION_SCHEMA, indent=2, ensure_ascii=False),
+            "\nMEDICINE RECORDS:",
+            json.dumps(indexed, indent=2, ensure_ascii=False),
+            "\nReturn JSON only. Do not omit or reorder records.",
+        ]
+    )
+
+
 def test_prep_prompt(tests: list[str]) -> str:
     """Prompt: lab test names → simple Bangla prep instructions (Layer 5).
 
-    TODO: implement. Must stay descriptive (fasting/timing/what to bring) and must not
-    interpret results or suggest additional tests.
+    This helper is not currently wired into the hero flow. It stays descriptive
+    (fasting/timing/what to bring) and cannot interpret results or add tests.
     """
-    raise NotImplementedError("TODO: test-prep prompt (Layer 5)")
+    safe_tests = [str(test).strip() for test in tests if str(test).strip()]
+    return "\n".join(
+        [
+            "আপনি বাংলাদেশের রোগীর জন্য ল্যাব টেস্টের প্রস্তুতি খুব সহজ বাংলায় লেখেন।",
+            "শুধু দেওয়া টেস্টগুলোর সাধারণ প্রস্তুতি বলুন। ফলাফল ব্যাখ্যা করবেন না, "
+            "নতুন টেস্ট বলবেন না, ওষুধ বন্ধ করতে বলবেন না।",
+            "প্রস্তুতি নিশ্চিত না হলে বলুন ল্যাব বা ডাক্তারের কাছে জেনে নিতে।",
+            "প্রতিটি টেস্টের জন্য JSON array দিন: "
+            '{"test":"নাম","prep_bn":"সংক্ষিপ্ত প্রস্তুতি","uncertain":false}।',
+            "টেস্ট:",
+            json.dumps(safe_tests, ensure_ascii=False),
+            "JSON ছাড়া আর কিছু লিখবেন না।",
+        ]
+    )

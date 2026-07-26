@@ -1,183 +1,134 @@
-# Oushudh Bondhu (ওষুধ বন্ধু)
+# Oushudh Bondhu — product and technical specification
 
-*"Medicine Friend"* — a patient-facing prescription reader for Bangladesh.
-Built for **Build With Gemma @ Bangladesh**, GenAI for Good track.
+## Clearly defined problem
 
----
+Many prescriptions in Bangladesh mix handwritten brand names, English medical terms
+and compact Latin dose notation. A patient may not know that `1+0+1`, `TDS`, `HS`,
+`a.c.` and `p.c.` encode timing instructions. Paper records also make it hard to notice
+when different prescriptions contain the same active ingredient.
 
-## Problem statement
+Oushudh Bondhu turns a prescription image into an understandable Bangla medication
+plan. It does not diagnose or decide treatment.
 
-In Bangladesh a handwritten prescription is effectively an encrypted document for the
-patient:
+## Core user flow
 
-- **Illegible handwriting** causes wrong-medicine errors at the pharmacy counter.
-- **Doses are written in Latin/shorthand** (`1+0+1`, `TDS`, `OD`, `HS`, `SOS`,
-  `a.c`/`p.c`, `×7d`) that low-literacy and rural patients cannot parse.
-- **English drug names** add another language barrier on top of the handwriting.
-- Patients **mistime doses or stop antibiotics early**, driving resistance and relapse.
-- **Nobody cross-checks for duplicate or interacting drugs** across prescriptions from
-  different doctors — e.g. two paracetamol brands taken together → overdose.
-- **Paper prescriptions get lost**, so there is no medication history to reason over.
-- **High out-of-pocket health spend** makes generic/cost awareness matter too.
+1. Capture, upload or select the synthetic demo prescription.
+2. Mildly normalize the image and send it to Gemma 4.
+3. Validate Gemma’s JSON into medicine, test, advice and follow-up fields.
+4. Mark low-confidence fields for pharmacist/doctor verification.
+5. Show instant table-grounded Bangla wording; optionally request richer Gemma prose.
+6. Compute a timetable from dose notation in deterministic code.
+7. Compare resolved medicines with a limited local table and active saved history.
+8. Optionally synthesize Bangla audio and save the structured prescription locally.
 
-## Idea
+## Competition fit
 
-Photograph the prescription → Gemma 4 vision extracts it into structured data → decode
-shorthand → explain each medicine in simple Bangla → generate a dose timetable and read
-it aloud → flag duplicate/interacting drugs grounded in a local drug table + scan
-history.
+This is a **multimodal workflow automation** project:
 
-**The app interprets and reminds; it never diagnoses or overrides the doctor.**
-
-## Features
-
-### Layer 1 — Extraction (Gemma vision)
-Structured fields per drug: brand, inferred generic, strength, dose pattern, frequency,
-food timing, duration, route. Auto-decode Latin/shorthand. Split the Rx into
-**medicines / tests / advice / follow-up**. Confidence flagging on ambiguous
-handwriting.
-
-### Layer 2 — Bangla explanation
-Plain-language purpose + how/when to take + key caution per drug. Notation → human
-Bangla sentence. Bangla text-to-speech.
-
-### Layer 3 — Adherence
-Visual daily dose timetable. Reminder times. Antibiotic-course "finish the full course"
-tracker.
-
-### Layer 4 — Safety insight
-Duplicate/same-generic detection and simple interaction checks across current + past
-prescriptions (grounded in `data/drugs_bd.csv`). Max-dose / paracetamol-ceiling alert.
-Extracted red-flag symptoms. Low-confidence items routed to "verify with pharmacist."
-
-### Layer 5 — Access & continuity
-Show generic name for cheaper-equivalent / verify-substitute. SQLite prescription
-history. Lab-test list with prep instructions. Share with caregiver.
-
-**Demo hero path:** Layer 1 → 2 → 3 + the Layer 4 duplicate check.
-
-## Tech stack
-
-Gemma 4 (`gemma-4-31b-it` primary via Gemini API free tier, `gemma-4-12b-it` + local
-Ollama `gemma4:12b` fallback) · Python + Streamlit · gTTS (Bangla) · SQLite · curated
-`drugs_bd.csv` · deploy on Hugging Face Spaces · Kaggle notebook + public GitHub repo
-for reproducibility. **No fine-tuning** — Gemma 4 as-is with few-shot prompting.
-
-## Gemma role & why it fits (hackathon requirement)
-
-Gemma 4 does the multimodal extraction (handwriting → structured JSON), the shorthand
-reasoning, and the Bangla generation. It is open-weight and edge-capable, so the local
-12B fallback gives real offline / low-connectivity operation — directly relevant to
-Bangladesh.
-
-Concretely, Gemma 4 is load-bearing in three places (RULES.md #13):
-
-| Stage | Gemma 4 does | Not a chatbot because |
+| Stage | Gemma responsibility | Downstream artifact |
 |---|---|---|
-| `ocr_pipeline.py` | image → structured JSON per drug | no free-text turn; output is a validated schema |
-| `explain.py` | shorthand → Bangla sentences + timetable | deterministic downstream artifact (grid, TTS) |
-| `safety.py` | normalises brand → generic for matching | verdicts come from the CSV, not the model |
+| Image extraction | prescription pixels → structured medicine records | validated table |
+| Language adaptation | medicine record → short plain-Bangla explanation | patient-readable cards |
+| Local fallback | multimodal inference through Ollama | low-connectivity continuity |
 
-Value = **automation + multimodal extraction + safety insight** (RULES.md #14), not
-conversation.
+The safety verdicts and timetable are code/data grounded. This separation makes Gemma
+central without asking a generative model to make clinical decisions.
 
-## Routing plan
+The strongest competition framing is **GenAI for Good / healthcare access**, with
+multimodal understanding, structured data processing, voice output and optional offline
+inference as the technical differentiators.
 
-**Streamlit multipage (built now):**
+## Architecture
 
-- `app.py` — sets page config, renders the persistent medical disclaimer + model-status
-  badge, and the sidebar nav.
-- **Page 1 "Scan"** (`pages/1_Scan.py`) — `camera_input` / `file_uploader` →
-  preprocess → call `ocr_pipeline` → store structured result in `st.session_state` →
-  route to Result.
-- **Page 2 "Result"** (`pages/2_Result.py`) — renders (a) structured medicines table
-  with confidence flags, (b) plain-Bangla explanation per drug, (c) dose timetable
-  grid, (d) "Listen" TTS button, (e) safety warnings panel. Save-to-history button.
-- **Page 3 "History"** (`pages/3_History.py`) — lists past prescriptions from SQLite;
-  selecting one re-opens Result in read-only mode; powers the cross-prescription
-  duplicate check.
+```text
+camera/upload/demo
+        │
+        ▼
+PIL preprocess ──► Gemma 4 vision ──► defensive JSON parser
+                                              │
+              ┌───────────────────────────────┼──────────────────────┐
+              ▼                               ▼                      ▼
+     Gemma Bangla explanation       deterministic schedule      local safety rules
+              │                               │                      │
+              └──────────────► Result UI ◄────┴──────────────────────┘
+                                  │
+                         gTTS + SQLite history
+```
 
-**If we later switch to Next.js:** Scan = `/`, Result = `/rx/[id]`, History =
-`/history`. Build Streamlit now.
+### Model gateway
 
-## API key & fallback structure
+`gemma_client.generate()` is the only function allowed to call an inference SDK.
 
-- `GEMINI_API_KEY` is read from the environment (`.env`, loaded via `python-dotenv`).
-  **Never hardcoded.** `.env.example` ships with `GEMINI_API_KEY=your_key_here`; the
-  real key goes in `.env`, which is git-ignored.
-- The `google-genai` SDK is used. **All** model calls (text + image) go through one
-  function, and no other file may touch the SDK (RULES.md #8):
+1. Prefer `gemma-4-31b-it`.
+2. Retry transient failures with exponential backoff.
+3. Fall back to `gemma-4-26b-a4b-it`.
+4. `gemma4:12b` through local Ollama.
+5. Return structured failure data rather than raising into the UI.
 
-  ```python
-  gemma_client.generate(prompt: str, image: bytes | None = None, json_mode: bool = False) -> str
-  ```
+The primary model completed a live synthetic multimodal test on 26 July 2026. The
+Ollama model identifier is published but local performance depends on the demo machine
+and must be tested after pulling its weights.
 
-**Ordered fallback chain — transparent to callers:**
+## Data contracts
 
-1. **PRIMARY:** `gemma-4-31b-it` via Gemini API (best handwriting OCR).
-2. On **429 / rate-limit / timeout**: retry with exponential backoff, **3 attempts**,
-   via `tenacity`.
-3. On continued failure: **downgrade to `gemma-4-12b-it`** via the same API.
-4. On total API failure or no internet: fall back to **local Ollama** running
-   `gemma4:12b` (tag is a config constant — `config.OLLAMA_MODEL`).
-5. If everything fails: **return a structured error, never crash the UI.**
+Each extracted medicine contains:
 
-The **active model + source** (`"cloud 31B"` / `"cloud 12B"` / `"local"`) is exposed via
-`gemma_client.get_status()` so the UI can show a status badge. This doubles as the
-offline-capable story. The **last successful extraction is cached in session**
-(`gemma_client.get_cached_success()`) so a live-demo rate-limit does not wipe the
-screen (RULES.md #12).
+- brand and optional inferred generic;
+- form and strength;
+- dose pattern/frequency and original frequency text;
+- food timing, duration and route;
+- confidence, uncertain fields and raw transcribed text.
 
-## Assumptions made during scaffolding
+A prescription also contains tests, advice, follow-up, red flags, overall confidence,
+unreadable regions, model provenance and a structured error field.
 
-Recorded per the brief. Each one is cheap to change; several want a decision before
-demo day.
+Malformed model output, markdown fences, trailing prose, percentage confidence,
+qualitative confidence, missing keys and bare medicine lists are handled without
+crashing.
 
-1. **Repo root = project root.** The brief's tree is rooted at `oushudh-bondhu/`; the
-   working directory and GitHub remote are already `GemmaProteinPowder`, so the files
-   live at the repo root rather than in a redundant nested folder. Rename later with a
-   single `git mv` if you want the nesting.
-2. **⚠️ Gemma 4 model IDs are unverified.** `gemma-4-31b-it`, `gemma-4-12b-it` and the
-   Ollama tag `gemma4:12b` are taken from the brief and have **not** been confirmed
-   against the live Gemini API model list or the Ollama registry. They are declared
-   once in `config.py` and overridable by env var, so a rename is a one-line fix. As of
-   the last confirmed public Gemma release the shipping IDs were `gemma-3-*`
-   (e.g. `gemma-3-27b-it`) with Ollama tags like `gemma3:12b`. **Run
-   `scripts/check_models.py`-equivalent (`python -c "import config, gemma_client"` plus
-   a live call) before the demo and correct `config.py` if the IDs 404.**
-3. **JSON mode is best-effort.** Gemma models served through the Gemini API have not
-   historically supported `response_mime_type="application/json"` or system
-   instructions the way Gemini models do. `gemma_client` therefore *tries* the
-   structured-output config and, if the API rejects it, transparently retries without
-   it and relies on prompt-level JSON instruction plus defensive parsing in
-   `ocr_pipeline.parse_extraction()` (RULES.md #10).
-4. **UI helpers live in `app.py` behind a `main()` guard**, so `pages/*` can
-   `from app import render_disclaimer, render_model_badge` without re-executing the
-   home page. This keeps the file list exactly as specified instead of adding `ui.py`.
-5. **Interaction rules are split**: per-drug facts (generic, class, duplicate group,
-   max daily dose, interaction tags) live in `data/drugs_bd.csv`; the tag-pair rule
-   table lives as a constant in `safety.py`. Both are code/data, never model freehand
-   (RULES.md #4).
-6. **⚠️ `data/drugs_bd.csv` is an unverified seed** written from general knowledge of
-   common Bangladeshi brands — ~32 rows, brand↔generic, duplicate groups, max daily mg.
-   It is a demo fixture, **not a formulary**, and every row needs pharmacist review
-   before this is shown to a real patient.
-7. **gTTS needs internet.** The Bangla TTS path is cloud-dependent, so "fully offline"
-   is true for extraction/explanation via local Ollama but not for audio. Either
-   caveat this in the pitch or swap to an offline TTS engine later.
-8. **`.env` is created locally with the placeholder value** so the git-ignore rule is
-   verifiable; it contains no real key and is not tracked.
-9. **SQLite file `oushudh.db` is git-ignored**; history is demo-local only
-   (RULES.md #6).
+## Deterministic safeguards
 
-## Limitations & future work
+- `1+0+1`-style patterns and standard frequency abbreviations are parsed by Python.
+- A three-part dose maps to morning/noon/night; four parts fill all four time slots.
+- Duplicate generic/class, selected interaction-tag pairs and daily quantity checks are
+  resolved against `data/drugs_bd.csv`.
+- Low-confidence extraction never receives an authoritative model-written explanation.
+- Saved courses with unknown duration stay visible to cross-history checking.
 
-- **Handwriting OCR accuracy is the main risk** — the demo lives or dies on it. Mitigate
-  with confidence flags and the "verify with pharmacist" route, never silent guessing.
-- **Free-tier rate limits** on the Gemini API; hence the retry → 12B → local chain and
-  the session cache.
-- **The drug table is a small seed, not a full formulary** — no completeness guarantee,
-  no dose-by-indication logic, no paediatric weight-based dosing.
-- **Not a medical device.** No diagnosis, no prescribing, no dose changes (RULES.md #1).
-- Future: offline TTS, real reminder notifications, pharmacist-verified drug table,
-  Bangla OCR for printed Rx, caregiver sharing, cost/generic-substitute pricing.
+## Storage and privacy
+
+SQLite stores structured demo prescriptions locally. Database files, uploads, generated
+audio, `.env` and Streamlit secrets are Git-ignored. The generated demo fixture contains
+no real names, identifiers or clinical encounter data.
+
+This prototype has no authentication or encryption at rest and must not be deployed for
+real patient records without a proper privacy and security design.
+
+## Validation
+
+The automated suite covers preprocessing, defensive parsing, dose conversion, model
+failure behavior, safety checks, SQLite round-trips, history deletion, TTS utilities and
+the synthetic fixture. Streamlit’s in-process tester also executes all four pages.
+
+See [VALIDATION.md](VALIDATION.md) for the latest recorded result.
+
+## Current limitations
+
+1. The 38-row drug table and interaction rules are unverified demo data.
+2. Model confidence is not calibrated clinical confidence.
+3. Handwriting and poor image quality remain the largest technical risk.
+4. gTTS is online-only.
+5. Ollama fallback needs roughly the resources indicated by the selected quantization
+   and has not yet been benchmarked on the presentation machine.
+6. This is not clinically validated, a medical device, or a replacement for medication
+   reconciliation by qualified professionals.
+
+## Required work before real-world use
+
+- licensed pharmacist review with per-row provenance and versioning;
+- larger Bangladesh brand/generic source licensed for redistribution;
+- evaluation set of diverse, consented or synthetic prescriptions;
+- field-level OCR precision/recall and confidence calibration;
+- privacy impact assessment, encryption, authentication and retention controls;
+- human-factors testing with Bangla-speaking patients and pharmacists;
+- regulatory and clinical safety review.

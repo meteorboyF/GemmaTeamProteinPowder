@@ -1,125 +1,142 @@
-# 💊 Oushudh Bondhu (ওষুধ বন্ধু) — "Medicine Friend"
+# 💊 Oushudh Bondhu (ওষুধ বন্ধু)
 
-A patient-facing prescription reader for Bangladesh, built for
-**Build With Gemma @ Bangladesh** (GenAI for Good).
+A Bangladesh-focused prescription understanding workflow built for **Build With Gemma
+@ Bangladesh**.
 
-Photograph a handwritten prescription → **Gemma 4** extracts it into structured data →
-decodes the Latin/shorthand (`1+0+1`, `TDS`, `HS`, `p.c`, `×7d`) → explains each
-medicine in **plain Bangla** → builds a **dose timetable** and reads it aloud → flags
-**duplicate/interacting drugs** against a local drug table and your scan history.
+Photograph a prescription → Gemma 4 converts it to validated structured data → the app
+turns dose shorthand into a Bangla timetable → reads that timetable aloud → checks the
+current and saved prescriptions for known duplicate medicines and selected interactions.
 
-> ⚠️ **This app never diagnoses, prescribes, or changes a dose.** It interprets and
-> reminds. The doctor's instruction is always final. Not a medical device.
+> ⚠️ This app does not diagnose, prescribe, or change a dose. It helps a patient read
+> what is already written. The doctor’s instruction is final, and uncertain items must
+> be checked with a doctor or pharmacist.
 
-📄 [SPEC.md](SPEC.md) — problem, features, architecture, assumptions ·
-📏 [RULES.md](RULES.md) — safety & engineering rules (non-negotiable)
+## What is working
 
----
-
-## Status: scaffold
-
-The repo structure, docs, config and the **full Gemma fallback client** are done.
-Feature modules are stubs with typed signatures and TODOs — the app runs, the pages
-render, nothing hallucinates yet.
-
-| Module | State |
+| Capability | Implementation |
 |---|---|
-| `gemma_client.py` | ✅ implemented — full fallback chain |
-| `config.py`, `prompts.py` | ✅ implemented |
-| `data/drugs_bd.csv` | ⚠️ seeded, **needs pharmacist review** |
-| `app.py`, `pages/*` | 🟡 UI shell runs, sections TODO |
-| `ocr_pipeline.py`, `explain.py`, `safety.py`, `tts.py`, `db.py` | 🚧 stubs |
+| Multimodal prescription extraction | Gemma 4 image input + strict JSON prompt + defensive parser |
+| Bangla explanation | instant local-table explanation + optional richer Gemma prose |
+| Dose timetable | Deterministic Python parsing for `1+0+1`, `TDS`, `HS`, etc. |
+| Safety assistance | CSV-grounded duplicate, interaction, max-dose and history checks |
+| Voice | Bangla gTTS with local MP3 cache |
+| History | SQLite save, replay, active-course comparison and confirmed deletion |
+| Demo | One-click synthetic prescription with no patient data |
+| Resilience | retry → cloud fallback → local Ollama → structured error + last-good cache |
 
-## Quick start
+The repository currently has **23 automated tests** and a live synthetic-image check
+against `gemma-4-31b-it`. See [VALIDATION.md](VALIDATION.md).
+
+## Why this is not a chatbot
+
+Gemma is a load-bearing automation component:
+
+1. It sees a prescription image and emits a defined record for every medicine.
+2. That record drives code-generated tables, confidence routing, voice output and
+   local safety lookups.
+3. The user follows a scan-and-review workflow; there is no open-ended chat box.
+
+The locally relevant problem is medication understanding across handwritten English,
+Latin dose shorthand and Bangla patient communication. The cross-prescription check
+also addresses fragmented paper records when a patient sees more than one provider.
+
+## Run locally
+
+Python 3.11+ is recommended.
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
+python -m venv .venv
+# Windows: .venv\Scripts\activate
+# macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
+```
 
-cp .env.example .env         # then paste your key into .env
-# GEMINI_API_KEY from https://aistudio.google.com/app/apikey
+Copy `.env.example` to `.env`, add a Gemini API key, then run:
 
+```bash
 streamlit run app.py
 ```
 
-`.env` is git-ignored and must never be committed (RULES.md #7).
+Open **Scan → নিরাপদ ডেমো** for the synthetic hero flow. The key belongs only in
+`.env`; that file is ignored by Git. If a key was ever pasted into a chat, issue
+tracker, terminal transcript or commit, rotate it before deployment.
 
-### Optional: offline / local fallback
+### Optional local fallback
+
+The configured fallback is the multimodal Ollama tag:
 
 ```bash
-# install Ollama, then:
-ollama pull gemma4:12b       # ⚠️ verify this tag — see SPEC.md assumption #2
+ollama pull gemma4:12b
 ```
 
-With a local daemon running, the app keeps working with no internet and the status
-badge switches to **🔵 local**.
+With Ollama running, image extraction and Bangla explanation can continue locally.
+gTTS still requires internet, so audio is not part of the offline claim.
 
-## How the model is wired
+## Model routing
 
-Every model call in the codebase goes through exactly one function (RULES.md #8):
+All model access goes through `gemma_client.generate()`:
 
-```python
-gemma_client.generate(prompt: str, image: bytes | None = None, json_mode: bool = False) -> str
+```text
+gemma-4-31b-it
+  └─ transient error: exponential retry
+      └─ gemma-4-26b-a4b-it
+          └─ local Ollama gemma4:12b
+              └─ structured error; UI remains usable
 ```
 
-Fallback chain, transparent to callers:
+These cloud IDs were verified in July 2026, the 31B target completed the repository’s
+synthetic multimodal flow, and the local 12B tag is published by Ollama. Model IDs
+remain environment-overridable. Optional Gemma explanation may be slow on the hosted
+models, so it does not block the default result page.
 
+## Safety boundary
+
+- Gemma transcribes and explains; it does **not** author duplicate/interaction verdicts.
+- The schedule is computed from extracted notation, so the grid and audio use the same
+  source.
+- Confidence at or below the threshold is visibly marked and routed to verification.
+- The bundled drug CSV is a small **unverified demo seed**, not a Bangladeshi formulary
+  or a clinical interaction database. It must be reviewed by a licensed pharmacist
+  before real-patient use.
+- No real patient image or history belongs in the repository. Local database, uploads
+  and generated audio are ignored.
+
+See [DATA_SOURCES.md](DATA_SOURCES.md), [RULES.md](RULES.md), and [SPEC.md](SPEC.md).
+
+## Project layout
+
+```text
+app.py                 landing page, disclaimer and model status
+pages/1_Scan.py        camera, upload and synthetic demo
+pages/2_Result.py      extraction, explanation, timetable, audio and warnings
+pages/3_History.py     local history and read-only replay
+gemma_client.py        only model gateway and fallback chain
+ocr_pipeline.py        image preprocessing and defensive extraction parser
+explain.py             Gemma explanation + deterministic schedule
+safety.py              local rule engine
+db.py                  SQLite persistence
+tts.py                 Bangla speech and cache
+demo_data.py           generated non-PII demo prescription
+data/drugs_bd.csv      limited local brand seed
+tests/                 automated regression suite
 ```
-gemma-4-31b-it  ──429/timeout──►  3× exponential backoff
-      │ still failing
-      ▼
-gemma-4-12b-it  ──failing──►  local Ollama gemma4:12b  ──failing──►  structured error
+
+## Test
+
+```bash
+python -m pytest -q
+python -m compileall -q .
 ```
 
-The active target (`cloud 31B` / `cloud 12B` / `local`) is exposed via
-`gemma_client.get_status()` and rendered as a badge in the sidebar. The last successful
-result is cached in session so a live-demo rate-limit can't blank the screen.
+## Known limitations
 
-Total failure returns a structured error **document**, not an exception — check it with
-`gemma_client.is_error(text)`. The UI never crashes on model failure.
-
-## Layout
-
-```
-app.py              Streamlit entry + disclaimer + model badge + shared UI helpers
-config.py           env, model IDs, thresholds, feature flags, Bangla UI copy
-gemma_client.py     THE single point of Gemma access + fallback chain
-prompts.py          few-shot extraction + Bangla explanation prompts
-ocr_pipeline.py     PIL preprocess → extraction → defensive JSON parse
-explain.py          Bangla explanation (model) + dose timetable (pure Python)
-safety.py           duplicate / interaction / max-dose checks — CSV-grounded
-tts.py              Bangla text-to-speech (gTTS)
-db.py               SQLite prescription history
-data/drugs_bd.csv   ~38 common BD brands ↔ generics, duplicate groups, dose ceilings
-pages/1_Scan.py     capture/upload
-pages/2_Result.py   table + explanation + timetable + listen + warnings
-pages/3_History.py  past prescriptions
-```
-
-## Safety posture
-
-Worth stating plainly, because it shapes the design:
-
-- **Gemma never authors a safety warning.** It normalises a handwritten brand into a
-  generic; every duplicate/interaction/max-dose verdict comes from `data/drugs_bd.csv`
-  plus a hand-written rule table in `safety.py` (RULES.md #4).
-- **The timetable is computed, not generated** — so the grid on screen and the audio
-  read-out can never disagree.
-- **Low confidence is a first-class output.** Ambiguous handwriting is shown as
-  uncertain and routed to "verify with your pharmacist", never silently guessed
-  (RULES.md #3).
-- **No real patient data in this repo.** Sample prescriptions must be synthetic; the
-  SQLite history is demo-local and git-ignored (RULES.md #6).
-
-## Known gaps before demo day
-
-1. **Verify the Gemma 4 model IDs** — `gemma-4-31b-it`, `gemma-4-12b-it`, `gemma4:12b`
-   are unconfirmed. They live in `config.py` and are env-overridable. See SPEC.md
-   assumption #2.
-2. **Pharmacist review of `data/drugs_bd.csv`** and of `safety.INTERACTION_RULES`.
-3. **gTTS needs internet**, so the "fully offline" claim covers extraction and
-   explanation, not audio (SPEC.md assumption #7).
+- Handwritten clinical text can be misread even at high model confidence.
+- The local table covers only a small set of brands and a conservative set of rules.
+- Max-dose checks cannot account for age, weight, kidney/liver function, diagnosis or
+  medicines absent from the scan; they are advisory only.
+- No background reminder notifications or caregiver export are implemented.
+- This prototype is not clinically validated and is not a medical device.
 
 ## License
 
-TBD before publishing.
+MIT. Gemma model use is also subject to the applicable Gemma terms.

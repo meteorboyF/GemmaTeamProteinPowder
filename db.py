@@ -4,18 +4,22 @@ cross-prescription duplicate check (Layer 4).
 Demo-local only. No real patient PII belongs in here, sample data must be synthetic,
 and the DB file is git-ignored (RULES.md #6).
 
-STATUS: scaffold. Signatures and schema are final; bodies are TODO.
+Connections are short-lived so Streamlit reruns and Windows file handles stay safe.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import sqlite3
-from dataclasses import dataclass
-from datetime import date
+from contextlib import contextmanager
+from dataclasses import asdict, dataclass
+from datetime import UTC, date, datetime
 from typing import Any
 
 import config
+import explain
+import ocr_pipeline
 from ocr_pipeline import Medicine, Prescription
 
 logger = logging.getLogger(__name__)
@@ -32,7 +36,7 @@ CREATE TABLE IF NOT EXISTS prescriptions (
     label          TEXT,                    -- user-supplied nickname, e.g. "ডাক্তার - জ্বর"
     doctor_note    TEXT,
     image_path     TEXT,                    -- under data/uploads/, git-ignored
-    model_source   TEXT,                    -- "cloud 31B" | "cloud 12B" | "local"
+    model_source   TEXT,                    -- "cloud 31B" | "cloud 26B A4B" | "local"
     model_id       TEXT,
     overall_confidence REAL,
     raw_json       TEXT NOT NULL            -- full extraction, for read-only replay
@@ -74,18 +78,34 @@ class HistoryEntry:
 def get_connection() -> sqlite3.Connection:
     """Open ``config.DB_PATH`` with ``row_factory=sqlite3.Row`` and foreign keys on.
 
-    TODO: implement. Note Streamlit reruns across threads — either open per-call
-    (simplest, fine at this scale) or pass ``check_same_thread=False`` deliberately.
+    A new connection is opened per operation, which is simple and safe across
+    Streamlit reruns and threads at this scale.
     """
-    raise NotImplementedError("TODO: connection helper")
+    config.DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(config.DB_PATH, timeout=10)
+    connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys = ON")
+    connection.execute("PRAGMA journal_mode = WAL")
+    return connection
+
+
+@contextmanager
+def _connection_scope():
+    """Commit or roll back one operation and always release the SQLite handle."""
+    connection = get_connection()
+    try:
+        with connection:
+            yield connection
+    finally:
+        connection.close()
 
 
 def init_db() -> None:
     """Create tables if absent. Safe to call on every app start; call it from app.py.
 
-    TODO: implement.
     """
-    raise NotImplementedError("TODO: run SCHEMA")
+    with _connection_scope() as connection:
+        connection.executescript(SCHEMA)
 
 
 def save_prescription(
@@ -95,17 +115,89 @@ def save_prescription(
 ) -> int:
     """Persist an extraction and its medicines in one transaction. Returns the new id.
 
-    TODO: implement.
     """
-    raise NotImplementedError("TODO: insert prescription + medicines")
+    if not prescription.ok:
+        raise ValueError("Cannot save a failed prescription extraction")
+    init_db()
+    payload = asdict(prescription)
+    created_at = datetime.now(UTC).isoformat()
+    with _connection_scope() as connection:
+        cursor = connection.execute(
+            """
+            INSERT INTO prescriptions (
+                created_at, rx_date, label, doctor_note, image_path,
+                model_source, model_id, overall_confidence, raw_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                created_at,
+                None,
+                label.strip() if label and label.strip() else None,
+                None,
+                image_path,
+                prescription.model_source,
+                prescription.model_id,
+                prescription.overall_confidence,
+                json.dumps(payload, ensure_ascii=False),
+            ),
+        )
+        prescription_id = int(cursor.lastrowid)
+        for medicine in prescription.medicines:
+            connection.execute(
+                """
+                INSERT INTO medicines (
+                    prescription_id, brand, generic, strength, dose_pattern,
+                    frequency, duration, duration_days, confidence, raw_text
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    prescription_id,
+                    medicine.brand,
+                    medicine.generic,
+                    medicine.strength,
+                    medicine.dose_pattern,
+                    medicine.frequency,
+                    medicine.duration,
+                    explain.build_schedule(medicine).duration_days,
+                    medicine.confidence,
+                    medicine.raw_text,
+                ),
+            )
+    return prescription_id
 
 
 def list_prescriptions(limit: int = 50) -> list[HistoryEntry]:
     """Newest-first history rows for the History page.
 
-    TODO: implement.
     """
-    raise NotImplementedError("TODO: list query")
+    init_db()
+    safe_limit = max(1, min(int(limit), 500))
+    with _connection_scope() as connection:
+        rows = connection.execute(
+            """
+            SELECT p.id, p.created_at, p.label, p.rx_date,
+                   COUNT(m.id) AS medicine_count,
+                   p.overall_confidence, p.model_source
+            FROM prescriptions AS p
+            LEFT JOIN medicines AS m ON m.prescription_id = p.id
+            GROUP BY p.id
+            ORDER BY p.created_at DESC, p.id DESC
+            LIMIT ?
+            """,
+            (safe_limit,),
+        ).fetchall()
+    return [
+        HistoryEntry(
+            id=int(row["id"]),
+            created_at=str(row["created_at"]),
+            label=row["label"],
+            rx_date=row["rx_date"],
+            medicine_count=int(row["medicine_count"]),
+            overall_confidence=float(row["overall_confidence"] or 0.0),
+            model_source=str(row["model_source"] or ""),
+        )
+        for row in rows
+    ]
 
 
 def get_prescription(prescription_id: int) -> Prescription | None:
@@ -114,9 +206,28 @@ def get_prescription(prescription_id: int) -> Prescription | None:
     Parse via ``ocr_pipeline.parse_extraction`` so stored rows get the same defensive
     handling as fresh model output (RULES.md #10).
 
-    TODO: implement.
     """
-    raise NotImplementedError("TODO: fetch + rehydrate")
+    init_db()
+    with _connection_scope() as connection:
+        row = connection.execute(
+            "SELECT raw_json, model_source, model_id FROM prescriptions WHERE id = ?",
+            (int(prescription_id),),
+        ).fetchone()
+    if row is None:
+        return None
+    try:
+        payload = json.loads(row["raw_json"])
+        prescription = ocr_pipeline.parse_extraction(
+            json.dumps(payload, ensure_ascii=False)
+        )
+        prescription.model_source = str(
+            payload.get("model_source") or row["model_source"] or ""
+        )
+        prescription.model_id = str(payload.get("model_id") or row["model_id"] or "")
+        return prescription
+    except Exception:
+        logger.exception("could not rehydrate prescription %s", prescription_id)
+        return None
 
 
 def get_active_medicines(as_of: date | None = None) -> list[Medicine]:
@@ -126,14 +237,45 @@ def get_active_medicines(as_of: date | None = None) -> list[Medicine]:
     is in the future; rows with unknown duration are included with a note, since
     missing a real duplicate is worse than one extra advisory item.
 
-    TODO: implement.
     """
-    raise NotImplementedError("TODO: active-medicine query")
+    init_db()
+    reference = (as_of or date.today()).isoformat()
+    with _connection_scope() as connection:
+        rows = connection.execute(
+            """
+            SELECT m.brand, m.generic, m.strength, m.dose_pattern, m.frequency,
+                   m.duration, m.confidence, m.raw_text
+            FROM medicines AS m
+            JOIN prescriptions AS p ON p.id = m.prescription_id
+            WHERE m.duration_days IS NULL
+               OR date(p.created_at, '+' || m.duration_days || ' days') >= date(?)
+            ORDER BY p.created_at DESC, m.id ASC
+            """,
+            (reference,),
+        ).fetchall()
+    return [
+        Medicine(
+            brand=row["brand"],
+            generic=row["generic"],
+            strength=row["strength"],
+            dose_pattern=row["dose_pattern"],
+            frequency=row["frequency"],
+            duration=row["duration"],
+            confidence=float(row["confidence"] or 0.0),
+            raw_text=str(row["raw_text"] or ""),
+        )
+        for row in rows
+    ]
 
 
 def delete_prescription(prescription_id: int) -> bool:
     """Delete one history entry (and its medicines, via cascade). Returns success.
 
-    TODO: implement. Confirm in the UI before calling — this is not undoable.
+    Confirm in the UI before calling — this is not undoable.
     """
-    raise NotImplementedError("TODO: delete")
+    init_db()
+    with _connection_scope() as connection:
+        cursor = connection.execute(
+            "DELETE FROM prescriptions WHERE id = ?", (int(prescription_id),)
+        )
+    return cursor.rowcount > 0

@@ -22,11 +22,13 @@ import gemma_client
 # --------------------------------------------------------------------------------
 SS_PRESCRIPTION = "prescription"        # ocr_pipeline.Prescription for the current scan
 SS_EXPLANATIONS = "explanations"        # dict[str, explain.Explanation]
+SS_EXPLANATION_SOURCE = "explanation_source"  # "grounded" | "gemma"
 SS_SCHEDULES = "schedules"              # list[explain.MedicineSchedule]
 SS_WARNINGS = "warnings"                # list[safety.SafetyWarning]
 SS_IMAGE_BYTES = "image_bytes"          # preprocessed bytes of the current scan
 SS_READ_ONLY = "read_only"              # True when Result was opened from History
 SS_HISTORY_ID = "history_id"            # int id when replaying a saved Rx
+SS_AUDIO = "audio"                      # last generated timetable MP3 bytes
 
 
 def render_disclaimer() -> None:
@@ -37,7 +39,7 @@ def render_disclaimer() -> None:
 
 
 def render_model_badge(sidebar: bool = True) -> None:
-    """Show which Gemma target actually answered — cloud 31B / 12B / local.
+    """Show which Gemma target actually answered — cloud primary/fallback/local.
 
     Doubles as the offline-capability story for judges: when the badge reads "local",
     the app is running entirely on-device.
@@ -68,8 +70,13 @@ def main() -> None:
         initial_sidebar_state="expanded",
     )
 
-    # TODO: call db.init_db() here once db.py is implemented, so History works on a
-    # fresh clone without a manual setup step.
+    if config.ENABLE_HISTORY:
+        try:
+            import db
+
+            db.init_db()
+        except Exception as exc:
+            st.sidebar.warning(f"History storage is unavailable: {exc}")
 
     st.title(f"💊 {config.APP_NAME_BN}")
     st.subheader(config.APP_TAGLINE_BN)

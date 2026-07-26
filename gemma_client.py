@@ -7,7 +7,7 @@ Fallback chain (RULES.md #9), transparent to callers:
 
 1. ``gemma-4-31b-it`` via the Gemini API (best handwriting OCR).
 2. On 429 / rate-limit / timeout → exponential-backoff retry, 3 attempts (tenacity).
-3. On continued failure → downgrade to ``gemma-4-12b-it`` on the same API.
+3. On continued failure → use ``gemma-4-26b-a4b-it`` on the same API.
 4. On total API failure or no internet → local Ollama running ``gemma4:12b``.
 5. If everything fails → a **structured error string**, never an exception. The UI
    must never crash on model failure.
@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 # Status vocabulary — these exact strings are what the UI badge renders.
 # --------------------------------------------------------------------------------
 SOURCE_CLOUD_PRIMARY = "cloud 31B"
-SOURCE_CLOUD_FALLBACK = "cloud 12B"
+SOURCE_CLOUD_FALLBACK = "cloud 26B A4B"
 SOURCE_LOCAL = "local"
 SOURCE_NONE = "unavailable"
 
@@ -125,7 +125,10 @@ def _session_store() -> dict[str, Any]:
     """
     try:
         import streamlit as st
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
 
+        if get_script_run_ctx(suppress_warning=True) is None:
+            return _local_cache
         return st.session_state  # type: ignore[return-value]
     except Exception:  # pragma: no cover - no streamlit / no script run context
         return _local_cache
@@ -137,12 +140,17 @@ def cache_success(text: str, kind: str = "generic") -> None:
     RULES.md #12. Callers doing extraction should pass ``kind="extraction"``.
     """
     try:
-        _session_store()[_CACHE_KEY] = {
+        store = _session_store()
+        cached = store.get(_CACHE_KEY)
+        if not isinstance(cached, dict) or "text" in cached:
+            cached = {}
+        cached[kind] = {
             "text": text,
             "kind": kind,
             "at": time.time(),
             "status": get_status().as_dict(),
         }
+        store[_CACHE_KEY] = cached
     except Exception:  # never let caching break a request
         logger.debug("could not write session cache", exc_info=True)
 
@@ -150,14 +158,21 @@ def cache_success(text: str, kind: str = "generic") -> None:
 def get_cached_success(kind: str | None = None) -> dict[str, Any] | None:
     """Last cached successful response, optionally filtered by ``kind``."""
     try:
-        entry = _session_store().get(_CACHE_KEY)
+        cached = _session_store().get(_CACHE_KEY)
     except Exception:
         return None
-    if not entry:
+    if not isinstance(cached, dict) or not cached:
         return None
-    if kind is not None and entry.get("kind") != kind:
-        return None
-    return entry
+    # Read the pre-batching single-entry shape if an old Streamlit session has one.
+    if "text" in cached:
+        if kind is not None and cached.get("kind") != kind:
+            return None
+        return cached
+    if kind is not None:
+        entry = cached.get(kind)
+        return entry if isinstance(entry, dict) else None
+    entries = [value for value in cached.values() if isinstance(value, dict)]
+    return max(entries, key=lambda value: value.get("at", 0), default=None)
 
 
 # --------------------------------------------------------------------------------
@@ -249,7 +264,14 @@ def _get_client() -> Any:
                 from google import genai  # imported here so the app runs without the SDK
             except ImportError as exc:
                 raise PermanentModelError(f"google-genai not installed: {exc}") from exc
-            _client = genai.Client(api_key=config.GEMINI_API_KEY)
+            from google.genai import types
+
+            _client = genai.Client(
+                api_key=config.GEMINI_API_KEY,
+                http_options=types.HttpOptions(
+                    timeout=max(1, int(config.REQUEST_TIMEOUT_SECONDS * 1000))
+                ),
+            )
     return _client
 
 
@@ -278,10 +300,21 @@ def _call_cloud(model_id: str, prompt: str, image: bytes | None, json_mode: bool
     if image is not None:
         parts.append(types.Part.from_bytes(data=image, mime_type=_guess_mime(image)))
 
-    def _do(use_json: bool) -> Any:
+    def _do(use_json: bool, use_latency_controls: bool = True) -> Any:
         kwargs: dict[str, Any] = {}
         if use_json:
             kwargs["response_mime_type"] = "application/json"
+        if use_latency_controls:
+            kwargs.update(
+                {
+                    "thinking_config": types.ThinkingConfig(
+                        thinking_budget=config.THINKING_BUDGET,
+                        include_thoughts=False,
+                    ),
+                    "max_output_tokens": config.MAX_OUTPUT_TOKENS,
+                    "temperature": config.MODEL_TEMPERATURE,
+                }
+            )
         cfg = types.GenerateContentConfig(**kwargs) if kwargs else None
         return client.models.generate_content(
             model=model_id,
@@ -295,17 +328,29 @@ def _call_cloud(model_id: str, prompt: str, image: bytes | None, json_mode: bool
         if want_json:
             _json_mode_supported = True
     except Exception as exc:
-        # Gemma via Gemini API may reject the structured-output config outright. Retry
-        # once without it and fall back to prompt-level JSON + defensive parsing
-        # (RULES.md #10). Remember the answer so we only probe once.
+        # A serving target may reject one of the optional generation controls. Retry
+        # once with prompt-only JSON and defaults (RULES.md #10).
         blob = str(exc).lower()
-        if want_json and any(
-            h in blob for h in ("response_mime_type", "mime", "invalid_argument", "not supported")
-        ):
-            logger.info("json_mode unsupported on %s; falling back to prompt-level JSON", model_id)
-            _json_mode_supported = False
+        compatibility_error = any(
+            hint in blob
+            for hint in (
+                "response_mime_type",
+                "thinking",
+                "max_output_tokens",
+                "temperature",
+                "invalid_argument",
+                "not supported",
+            )
+        )
+        if compatibility_error:
+            logger.info(
+                "generation config unsupported on %s; retrying with model defaults",
+                model_id,
+            )
+            if want_json:
+                _json_mode_supported = False
             try:
-                response = _do(False)
+                response = _do(False, use_latency_controls=False)
             except Exception as inner:
                 raise _classify(inner) from inner
         else:
@@ -387,7 +432,9 @@ def local_available() -> bool:
             else getattr(m, "model", "")
             for m in models
         }
-        return any(n.startswith(config.OLLAMA_MODEL.split(":")[0]) for n in names)
+        target = config.OLLAMA_MODEL.casefold()
+        normalized = {str(name).casefold() for name in names if name}
+        return any(name == target or name.startswith(f"{target}@") for name in normalized)
     except Exception:
         return False
 
@@ -415,8 +462,8 @@ def generate(prompt: str, image: bytes | None = None, json_mode: bool = False) -
     cloud_chain: list[tuple[str, str]] = []
     if config.has_api_key():
         cloud_chain = [
-            (config.GEMMA_PRIMARY_MODEL, SOURCE_CLOUD_PRIMARY),   # step 1 (+ step 2 retry)
-            (config.GEMMA_FALLBACK_MODEL, SOURCE_CLOUD_FALLBACK),  # step 3
+            (config.GEMMA_PRIMARY_MODEL, SOURCE_CLOUD_PRIMARY),
+            (config.GEMMA_FALLBACK_MODEL, SOURCE_CLOUD_FALLBACK),
         ]
     else:
         attempts.append({"target": "cloud", "error": "GEMINI_API_KEY not configured"})
@@ -444,7 +491,7 @@ def generate(prompt: str, image: bytes | None = None, json_mode: bool = False) -
             "ok",
             degraded=(source != SOURCE_CLOUD_PRIMARY),
         )
-        cache_success(text)
+        cache_success(text, kind="extraction" if image is not None else "generic")
         return text
 
     # Step 4: local Ollama.
@@ -452,7 +499,7 @@ def generate(prompt: str, image: bytes | None = None, json_mode: bool = False) -
         try:
             text = _call_ollama(prompt, image, json_mode)
             _set_status(SOURCE_LOCAL, config.OLLAMA_MODEL, "offline fallback", degraded=True)
-            cache_success(text)
+            cache_success(text, kind="extraction" if image is not None else "generic")
             return text
         except ModelError as exc:
             attempts.append({"target": config.OLLAMA_MODEL, "error": str(exc)})
