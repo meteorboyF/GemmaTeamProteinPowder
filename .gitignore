@@ -43,3 +43,4 @@ Thumbs.db
 # --- local tooling state (machine-specific, not project config) ---
 # Trailing * also catches the .tmp.NNN.hash files the editor writes alongside it.
 .claude/settings.local.json*
+.vercel

@@ -1,0 +1,18 @@
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    DB_PATH=/tmp/oushudh.db \
+    AUDIO_DIR=/tmp/oushudh-audio \
+    UPLOAD_DIR=/tmp/oushudh-uploads
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+EXPOSE 80
+
+CMD ["sh", "-c", "streamlit run app.py --server.address=0.0.0.0 --server.port=${PORT:-80} --server.headless=true --browser.gatherUsageStats=false"]

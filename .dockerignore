@@ -1,0 +1,19 @@
+.git
+.github
+.claude
+.codex
+.agents
+.venv
+__pycache__
+*.py[cod]
+*.db
+*.sqlite
+*.sqlite3
+.env
+.env.*
+!.env.example
+.vercel
+Prescription pic
+data/audio
+data/uploads
+tests

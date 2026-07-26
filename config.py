@@ -74,8 +74,8 @@ REQUEST_TIMEOUT_SECONDS: float = float(os.getenv("REQUEST_TIMEOUT_SECONDS", "90"
 # Paths
 # --------------------------------------------------------------------------------
 DATA_DIR = BASE_DIR / "data"
-UPLOAD_DIR = DATA_DIR / "uploads"      # git-ignored (RULES.md #6)
-AUDIO_DIR = DATA_DIR / "audio"         # git-ignored
+UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", DATA_DIR / "uploads"))
+AUDIO_DIR = Path(os.getenv("AUDIO_DIR", DATA_DIR / "audio"))
 DRUGS_CSV = DATA_DIR / "drugs_bd.csv"
 DB_PATH = Path(os.getenv("DB_PATH", BASE_DIR / "oushudh.db"))
 
