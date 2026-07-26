@@ -53,11 +53,11 @@ if not prescription.ok:
             st.code(str(prescription.error))
     col_a, col_b = st.columns(2)
     with col_a:
-        if st.button("🔄 আবার চেষ্টা করুন", type="primary", width="stretch"):
+        if st.button("🔄 আবার চেষ্টা করুন", type="primary", use_container_width=True):
             st.switch_page("pages/1_Scan.py")
     with col_b:
         cached = gemma_client.get_cached_success("extraction")
-        if cached and st.button("📄 আগের সফল ফলাফল দেখুন", width="stretch"):
+        if cached and st.button("📄 আগের সফল ফলাফল দেখুন", use_container_width=True):
             st.session_state[SS_PRESCRIPTION] = ocr_pipeline.parse_extraction(cached["text"])
             st.rerun()
     st.stop()
@@ -92,7 +92,7 @@ for sched in schedules:
 st.dataframe(
     pd.DataFrame(rows),
     hide_index=True,
-    width="stretch",
+    use_container_width=True,
     column_config={
         "কখন খাবেন": st.column_config.TextColumn(width="large"),
         "": st.column_config.TextColumn(width="small"),
@@ -184,7 +184,7 @@ for sched in schedules:
     grid_rows.append(row)
 
 if grid_rows and any(s.slots for s in schedules):
-    st.dataframe(pd.DataFrame(grid_rows), hide_index=True, width="stretch")
+    st.dataframe(pd.DataFrame(grid_rows), hide_index=True, use_container_width=True)
 else:
     st.info("এই প্রেসক্রিপশনে নির্দিষ্ট সময়ের ছক তৈরি করা যায়নি।")
 
