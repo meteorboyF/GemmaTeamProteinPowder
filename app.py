@@ -31,7 +31,8 @@ SS_HISTORY_ID = "history_id"            # int id when replaying a saved Rx
 
 def render_disclaimer() -> None:
     """The medical disclaimer. MUST be called on every page (RULES.md #2)."""
-    st.warning(config.DISCLAIMER_BN, icon="⚠️")
+    # DISCLAIMER_BN already opens with ⚠️, so don't pass icon= as well or it renders twice.
+    st.warning(config.DISCLAIMER_BN)
     with st.expander("English"):
         st.caption(config.DISCLAIMER_EN)
 

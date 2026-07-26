@@ -28,14 +28,9 @@ st.info(
     icon="💡",
 )
 
-tab_camera, tab_upload = st.tabs(["📷 ক্যামেরা", "🖼️ ফাইল আপলোড"])
+tab_upload, tab_camera = st.tabs(["🖼️ ফাইল আপলোড", "📷 ক্যামেরা"])
 
 image_bytes: bytes | None = None
-
-with tab_camera:
-    shot = st.camera_input("প্রেসক্রিপশনের ছবি তুলুন", label_visibility="collapsed")
-    if shot is not None:
-        image_bytes = shot.getvalue()
 
 with tab_upload:
     upload = st.file_uploader(
@@ -45,6 +40,18 @@ with tab_upload:
     )
     if upload is not None:
         image_bytes = upload.getvalue()
+
+with tab_camera:
+    # st.camera_input requests camera permission as soon as it renders, and hangs the
+    # page on machines with no camera or a denied prompt — which is exactly the demo
+    # laptop failure mode. Gate it behind an explicit opt-in so merely opening Scan
+    # never triggers a permission dialog. Upload stays the default path.
+    if st.checkbox("ক্যামেরা চালু করুন"):
+        shot = st.camera_input("প্রেসক্রিপশনের ছবি তুলুন", label_visibility="collapsed")
+        if shot is not None:
+            image_bytes = shot.getvalue()
+    else:
+        st.caption("ক্যামেরা ব্যবহার করতে উপরের বক্সে টিক দিন।")
 
 if image_bytes:
     st.image(image_bytes, caption="নির্বাচিত ছবি", width="stretch")

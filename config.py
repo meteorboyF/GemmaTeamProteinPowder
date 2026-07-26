@@ -43,10 +43,14 @@ def has_api_key() -> bool:
 
 
 # --------------------------------------------------------------------------------
-# Model IDs  (see SPEC.md "Assumptions" #2 — these are UNVERIFIED, confirm before demo)
+# Model IDs — VERIFIED 2026-07-26 against client.models.list() on the free tier.
+# The only Gemma 4 models the API exposes are gemma-4-31b-it and gemma-4-26b-a4b-it.
+# (`gemma-4-12b-it`, named in the original brief, does NOT exist and 404s.)
 # --------------------------------------------------------------------------------
 GEMMA_PRIMARY_MODEL: str = os.getenv("GEMMA_PRIMARY_MODEL", "gemma-4-31b-it")
-GEMMA_FALLBACK_MODEL: str = os.getenv("GEMMA_FALLBACK_MODEL", "gemma-4-12b-it")
+# 26b-a4b is a sparse/MoE variant (~4B active params) — cheaper and faster than the
+# 31B dense primary, which is what we want from a fallback under rate-limit pressure.
+GEMMA_FALLBACK_MODEL: str = os.getenv("GEMMA_FALLBACK_MODEL", "gemma-4-26b-a4b-it")
 
 # Local Ollama fallback. TODO(verify): confirm the exact tag with `ollama list` /
 # `ollama pull gemma4:12b` on the demo machine and correct here if it differs.
@@ -114,8 +118,9 @@ APP_NAME = "Oushudh Bondhu"
 APP_NAME_BN = "ওষুধ বন্ধু"
 APP_TAGLINE_BN = "আপনার প্রেসক্রিপশন সহজ বাংলায়"
 
+# st.warning() supplies its own ⚠️ icon, so this string must not repeat it.
 DISCLAIMER_BN = (
-    "⚠️ এই অ্যাপ শুধু আপনার প্রেসক্রিপশন পড়ে বুঝিয়ে দেয় — কোনো রোগ নির্ণয় করে না, "
+    "এই অ্যাপ শুধু আপনার প্রেসক্রিপশন পড়ে বুঝিয়ে দেয় — কোনো রোগ নির্ণয় করে না, "
     "ওষুধ দেয় না, ডোজ বদলায় না। ডাক্তারের পরামর্শই চূড়ান্ত। সন্দেহ হলে ডাক্তার বা "
     "ফার্মাসিস্টের সাথে কথা বলুন।"
 )

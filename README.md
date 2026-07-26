@@ -65,10 +65,10 @@ gemma_client.generate(prompt: str, image: bytes | None = None, json_mode: bool =
 Fallback chain, transparent to callers:
 
 ```
-gemma-4-31b-it  ──429/timeout──►  3× exponential backoff
+gemma-4-31b-it      ──429/timeout──►  3× exponential backoff
       │ still failing
       ▼
-gemma-4-12b-it  ──failing──►  local Ollama gemma4:12b  ──failing──►  structured error
+gemma-4-26b-a4b-it  ──failing──►  local Ollama gemma4:12b  ──failing──►  structured error
 ```
 
 The active target (`cloud 31B` / `cloud 12B` / `local`) is exposed via
@@ -113,9 +113,10 @@ Worth stating plainly, because it shapes the design:
 
 ## Known gaps before demo day
 
-1. **Verify the Gemma 4 model IDs** — `gemma-4-31b-it`, `gemma-4-12b-it`, `gemma4:12b`
-   are unconfirmed. They live in `config.py` and are env-overridable. See SPEC.md
-   assumption #2.
+1. ~~Verify the cloud model IDs~~ — ✅ done 2026-07-26. `gemma-4-31b-it` (primary) and
+   `gemma-4-26b-a4b-it` (fallback) both confirmed present on the free tier;
+   `gemma-4-12b-it` does not exist and was replaced. **The Ollama tag `gemma4:12b` is
+   still unverified** — check with `ollama list` before demoing the offline story.
 2. **Pharmacist review of `data/drugs_bd.csv`** and of `safety.INTERACTION_RULES`.
 3. **gTTS needs internet**, so the "fully offline" claim covers extraction and
    explanation, not audio (SPEC.md assumption #7).

@@ -137,14 +137,18 @@ demo day.
    working directory and GitHub remote are already `GemmaProteinPowder`, so the files
    live at the repo root rather than in a redundant nested folder. Rename later with a
    single `git mv` if you want the nesting.
-2. **⚠️ Gemma 4 model IDs are unverified.** `gemma-4-31b-it`, `gemma-4-12b-it` and the
-   Ollama tag `gemma4:12b` are taken from the brief and have **not** been confirmed
-   against the live Gemini API model list or the Ollama registry. They are declared
-   once in `config.py` and overridable by env var, so a rename is a one-line fix. As of
-   the last confirmed public Gemma release the shipping IDs were `gemma-3-*`
-   (e.g. `gemma-3-27b-it`) with Ollama tags like `gemma3:12b`. **Run
-   `scripts/check_models.py`-equivalent (`python -c "import config, gemma_client"` plus
-   a live call) before the demo and correct `config.py` if the IDs 404.**
+2. **Cloud model IDs — VERIFIED 2026-07-26.** Checked against `client.models.list()`
+   with a live free-tier key. The API exposes exactly two Gemma 4 models:
+   `gemma-4-31b-it` (primary, confirmed working with a live generate call) and
+   `gemma-4-26b-a4b-it`. The `gemma-4-12b-it` named in the original brief **does not
+   exist and 404s**, so the fallback was corrected to `gemma-4-26b-a4b-it` — a
+   sparse/MoE variant with ~4B active params, i.e. cheaper and faster than the dense
+   31B, which is the right shape for a rate-limit fallback.
+   **⚠️ Still unverified: the Ollama tag `gemma4:12b`** — Ollama is not installed on
+   the dev machine, so step 4 of the chain has not been exercised against a real
+   daemon. Confirm with `ollama list` before claiming the offline story on stage. The
+   chain itself is tested: with no key and no `ollama` package it degrades to the
+   structured error without raising.
 3. **JSON mode is best-effort.** Gemma models served through the Gemini API have not
    historically supported `response_mime_type="application/json"` or system
    instructions the way Gemini models do. `gemma_client` therefore *tries* the
