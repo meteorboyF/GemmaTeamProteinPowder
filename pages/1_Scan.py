@@ -71,7 +71,7 @@ with tab_demo:
         "নমুনাটিতে Napa ও Ace আছে—দুই ব্র্যান্ডে একই paracetamol থাকায় "
         "নিরাপত্তা সতর্কতা দেখা যাবে।"
     )
-    if st.button("✨ নমুনা প্রেসক্রিপশন প্রস্তুত করুন", width="stretch"):
+    if st.button("✨ নমুনা প্রেসক্রিপশন প্রস্তুত করুন", use_container_width=True):
         from demo_data import synthetic_prescription_png
 
         st.session_state["demo_image_bytes"] = synthetic_prescription_png()
@@ -83,7 +83,7 @@ with tab_demo:
 if image_bytes:
     preview, action = st.columns([1, 1], vertical_alignment="center")
     with preview:
-        st.image(image_bytes, caption=image_source or "নির্বাচিত ছবি", width="stretch")
+        st.image(image_bytes, caption=image_source or "নির্বাচিত ছবি", use_container_width=True)
     with action:
         st.markdown("### ছবিটি প্রস্তুত ✓")
         st.write("Gemma ওষুধ, ডোজের সংকেত, পরীক্ষা ও ডাক্তারের উপদেশ আলাদা করবে।")
@@ -95,7 +95,7 @@ if image_bytes:
             """
         )
         st.caption("জটিল হাতের লেখায় ১–৩ মিনিট লাগতে পারে। এই পেজ বন্ধ করবেন না।")
-        start = st.button("✨ প্রেসক্রিপশন বুঝিয়ে দিন", type="primary", width="stretch")
+        start = st.button("✨ প্রেসক্রিপশন বুঝিয়ে দিন", type="primary", use_container_width=True)
 
     if start:
         # The 31B model can take 1-3 minutes on handwriting, so say so rather than

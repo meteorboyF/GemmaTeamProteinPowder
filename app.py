@@ -219,13 +219,13 @@ def render_sidebar() -> None:
             """,
             unsafe_allow_html=True,
         )
-        if st.button("🏠  হোম", key="_nav_home", width="stretch"):
+        if st.button("🏠  হোম", key="_nav_home", use_container_width=True):
             st.switch_page("app.py")
-        if st.button("📷  নতুন স্ক্যান", key="_nav_scan", width="stretch"):
+        if st.button("📷  নতুন স্ক্যান", key="_nav_scan", use_container_width=True):
             st.switch_page("pages/1_Scan.py")
-        if st.button("📋  বর্তমান ফলাফল", key="_nav_result", width="stretch"):
+        if st.button("📋  বর্তমান ফলাফল", key="_nav_result", use_container_width=True):
             st.switch_page("pages/2_Result.py")
-        if st.button("🕘  হিস্ট্রি", key="_nav_history", width="stretch"):
+        if st.button("🕘  হিস্ট্রি", key="_nav_history", use_container_width=True):
             st.switch_page("pages/3_History.py")
         st.divider()
         st.markdown(
@@ -315,10 +315,10 @@ def main() -> None:
     st.write("")
     primary, secondary = st.columns([2, 1])
     with primary:
-        if st.button("📷 প্রেসক্রিপশন স্ক্যান করুন", type="primary", width="stretch"):
+        if st.button("📷 প্রেসক্রিপশন স্ক্যান করুন", type="primary", use_container_width=True):
             st.switch_page("pages/1_Scan.py")
     with secondary:
-        if st.button("🧪 নিরাপদ ডেমো দেখুন", width="stretch"):
+        if st.button("🧪 নিরাপদ ডেমো দেখুন", use_container_width=True):
             from demo_data import synthetic_prescription_png
 
             st.session_state["demo_image_bytes"] = synthetic_prescription_png()

@@ -107,10 +107,10 @@ else:
 
 top_action, top_history = st.columns(2)
 with top_action:
-    if st.button("📷 আরেকটি প্রেসক্রিপশন স্ক্যান করুন", width="stretch"):
+    if st.button("📷 আরেকটি প্রেসক্রিপশন স্ক্যান করুন", use_container_width=True):
         st.switch_page("pages/1_Scan.py")
 with top_history:
-    if st.button("🕘 হিস্ট্রি দেখুন", width="stretch"):
+    if st.button("🕘 হিস্ট্রি দেখুন", use_container_width=True):
         st.switch_page("pages/3_History.py")
 
 # --- (a) Extracted medicines --------------------------------------------------------
@@ -227,7 +227,7 @@ if SS_EXPLANATIONS not in st.session_state:
 explanations = st.session_state[SS_EXPLANATIONS]
 if config.has_api_key():
     st.caption("সাধারণ তথ্য এখনই দেখা যাচ্ছে। চাইলে Gemma একবারে সব ওষুধের সহজ ব্যাখ্যা তৈরি করবে।")
-    if st.button("✨ Gemma দিয়ে ব্যাখ্যা আরও সহজ করুন", width="stretch"):
+    if st.button("✨ Gemma দিয়ে ব্যাখ্যা আরও সহজ করুন", use_container_width=True):
         with st.spinner("সহজ বাংলা ব্যাখ্যা তৈরি হচ্ছে…"):
             explanations = explain.explain_prescription(prescription)
             st.session_state[SS_EXPLANATIONS] = explanations
@@ -300,7 +300,7 @@ else:
         st.session_state["_speech_text"] = speech_text
         st.session_state.pop("_speech_audio", None)
         st.session_state.pop("_speech_error", None)
-    if st.button("▶️ সময়সূচি পড়ে শোনান", width="stretch"):
+    if st.button("▶️ সময়সূচি পড়ে শোনান", use_container_width=True):
         with st.spinner("বাংলা অডিও তৈরি হচ্ছে…"):
             speech = tts.speak(speech_text)
             if speech.ok:
@@ -355,7 +355,7 @@ with share_col:
             data=explain.prescription_share_text(prescription, schedules).encode("utf-8"),
             file_name="oushudh-bondhu-summary.txt",
             mime="text/plain",
-            width="stretch",
+            use_container_width=True,
         )
 with save_col:
     with st.container(border=True):
@@ -367,7 +367,7 @@ with save_col:
                 placeholder="যেমন: জ্বরের প্রেসক্রিপশন",
                 max_chars=120,
             )
-            if st.button("💾 হিস্ট্রিতে সেভ করুন", type="primary", width="stretch"):
+            if st.button("💾 হিস্ট্রিতে সেভ করুন", type="primary", use_container_width=True):
                 try:
                     saved_id = db.save_prescription(prescription, label=label)
                     st.session_state[SS_HISTORY_ID] = saved_id
@@ -379,5 +379,5 @@ with save_col:
         else:
             st.subheader("হিস্ট্রিতে সেভ করা")
             st.caption("এই ফলাফলটি ইতিমধ্যে আপনার ডিভাইসে আছে।")
-            if st.button("🕘 সব হিস্ট্রি দেখুন", width="stretch"):
+            if st.button("🕘 সব হিস্ট্রি দেখুন", use_container_width=True):
                 st.switch_page("pages/3_History.py")

@@ -400,7 +400,12 @@ def local_available() -> bool:
 
         client = ollama.Client(host=config.OLLAMA_HOST)
         listing = client.list()
-        models = listing.get("models", []) if isinstance(listing, dict) else []
+        # ollama SDK ≥ 0.4 returns a typed ListResponse object, not a plain dict.
+        # Handle both for backwards compatibility.
+        if isinstance(listing, dict):
+            models = listing.get("models", [])
+        else:
+            models = list(getattr(listing, "models", []) or [])
         names = {
             (m.get("model") or m.get("name") or "") if isinstance(m, dict)
             else getattr(m, "model", "")

@@ -54,7 +54,7 @@ if not entries:
         "“হিস্ট্রিতে সেভ করুন” চাপলে এখানে দেখা যাবে।",
         icon="📭",
     )
-    if st.button("📷 প্রথম প্রেসক্রিপশন স্ক্যান করুন", type="primary", width="stretch"):
+    if st.button("📷 প্রথম প্রেসক্রিপশন স্ক্যান করুন", type="primary", use_container_width=True):
         st.switch_page("pages/1_Scan.py")
     st.stop()
 
@@ -118,7 +118,7 @@ for entry in visible_entries:
                 "খুলে দেখুন",
                 key=f"open-{entry.id}",
                 type="primary",
-                width="stretch",
+                use_container_width=True,
             ):
                 prescription = db.get_prescription(entry.id)
                 if prescription is None:
@@ -133,17 +133,17 @@ for entry in visible_entries:
                     st.session_state.pop("_speech_audio", None)
                     st.switch_page("pages/2_Result.py")
         with delete_col:
-            if st.button("মুছুন", key=f"delete-{entry.id}", width="stretch"):
+            if st.button("মুছুন", key=f"delete-{entry.id}", use_container_width=True):
                 st.session_state["_confirm_delete"] = entry.id
                 st.rerun()
 
         if st.session_state.get("_confirm_delete") == entry.id:
             st.warning("এই সেভ করা প্রেসক্রিপশন স্থায়ীভাবে মুছে যাবে।")
             yes, no = st.columns(2)
-            if yes.button("হ্যাঁ, মুছুন", key=f"confirm-{entry.id}", width="stretch"):
+            if yes.button("হ্যাঁ, মুছুন", key=f"confirm-{entry.id}", use_container_width=True):
                 db.delete_prescription(entry.id)
                 st.session_state.pop("_confirm_delete", None)
                 st.rerun()
-            if no.button("বাতিল", key=f"cancel-{entry.id}", width="stretch"):
+            if no.button("বাতিল", key=f"cancel-{entry.id}", use_container_width=True):
                 st.session_state.pop("_confirm_delete", None)
                 st.rerun()
