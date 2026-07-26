@@ -69,8 +69,14 @@ EXTRACTION_SCHEMA: dict[str, Any] = {
             "confidence": "float 0.0-1.0 — YOUR honest legibility confidence",
             "uncertain_fields": ["names of fields you guessed"],
             "raw_text": "the exact line as written on the prescription",
+            "instructions_raw": (
+                "any extra how-to-take line written next to THIS medicine, verbatim, "
+                "in whatever language it is written (often Bangla), or null"
+            ),
         }
     ],
+    "diagnosis": ["diagnoses the doctor WROTE on the page, verbatim; [] if none"],
+    "complaints": ["patient complaints / symptoms written on the page, verbatim"],
     "tests": ["lab tests / investigations ordered, verbatim"],
     "advice": ["non-drug advice lines, verbatim"],
     "follow_up": "string — follow-up date or interval, or null",
@@ -80,10 +86,13 @@ EXTRACTION_SCHEMA: dict[str, Any] = {
 }
 
 _FEW_SHOT_EXAMPLE_INPUT = """\
+C/O: Fever, dry cough x 3 days
+Allergic Rhinitis
 Rx
 1. Tab. Napa 500mg ------ 1+0+1 (p.c) x 5 days
 2. Cap. Seclo 20mg ------ 1+0+0 (a.c) x 14 days
 3. Tab. Monas 10 -------- 0+0+1 (HS) x 1 month
+   রাতে শোওয়ার ৩০ মিনিট আগে ১টি ট্যাবলেট খাবেন — পরপর ৩০ দিন
 Inv: CBC, S. Creatinine
 Advice: plenty of fluids, rest
 F/U: after 1 week"""
@@ -96,6 +105,7 @@ _FEW_SHOT_EXAMPLE_OUTPUT = {
             "frequency_text": "twice daily", "food_timing": "after_food",
             "duration": "5 days", "route": "oral", "confidence": 0.97,
             "uncertain_fields": [], "raw_text": "Tab. Napa 500mg 1+0+1 (p.c) x 5 days",
+            "instructions_raw": None,
         },
         {
             "brand": "Seclo", "generic": "Omeprazole", "form": "capsule",
@@ -103,15 +113,19 @@ _FEW_SHOT_EXAMPLE_OUTPUT = {
             "frequency_text": "once daily", "food_timing": "before_food",
             "duration": "14 days", "route": "oral", "confidence": 0.95,
             "uncertain_fields": [], "raw_text": "Cap. Seclo 20mg 1+0+0 (a.c) x 14 days",
+            "instructions_raw": None,
         },
         {
             "brand": "Monas", "generic": "Montelukast", "form": "tablet",
-            "strength": "10 mg", "dose_pattern": "0+0+1", "frequency": "HS",
+            "strength": "10 mg", "dose_pattern": "0+0+1", "frequency": "OD HS",
             "frequency_text": "once daily at bedtime", "food_timing": None,
             "duration": "1 month", "route": "oral", "confidence": 0.92,
             "uncertain_fields": [], "raw_text": "Tab. Monas 10 0+0+1 (HS) x 1 month",
+            "instructions_raw": "রাতে শোওয়ার ৩০ মিনিট আগে ১টি ট্যাবলেট খাবেন — পরপর ৩০ দিন",
         },
     ],
+    "diagnosis": ["Allergic Rhinitis"],
+    "complaints": ["Fever", "dry cough x 3 days"],
     "tests": ["CBC", "S. Creatinine"],
     "advice": ["plenty of fluids", "rest"],
     "follow_up": "after 1 week",
@@ -133,6 +147,12 @@ HARD RULES:
 - Do NOT add advice, diagnosis, or medicines that are not written on the page.
 - `generic` may be inferred from a Bangladeshi brand name you recognise; if you are not
   sure, set it to null rather than guessing.
+- Prescriptions are often written in BOTH English and Bangla. Read both. Handwritten
+  Bangla instruction lines under a medicine usually carry the real timing detail
+  ("রাতে শোওয়ার ৩০ মিনিট আগে", "খাবারের পরে") — capture them in `instructions_raw`
+  AND use them to fill `food_timing` / `frequency` / `duration`.
+- `diagnosis` and `complaints` are TRANSCRIPTION, not inference: copy only what is
+  written on the page. Never add a diagnosis the doctor did not write.
 - Output ONLY a single JSON object. No markdown fences, no commentary before or after.
 """
 

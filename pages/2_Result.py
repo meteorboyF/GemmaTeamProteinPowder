@@ -17,8 +17,10 @@ import pandas as pd
 import streamlit as st
 
 import config
+import explain
 import gemma_client
 import ocr_pipeline
+import prompts
 from app import (
     SS_EXPLANATIONS,
     SS_PRESCRIPTION,
@@ -70,20 +72,17 @@ c1.metric("ওষুধ", len(prescription.medicines))
 c2.metric("সামগ্রিক নিশ্চয়তা", f"{prescription.overall_confidence * 100:.0f}%")
 c3.metric("যাচাই দরকার", len(low_conf))
 
-_FOOD_BN = {
-    "before_food": "খাবারের আগে",
-    "after_food": "খাবারের পরে",
-    "with_food": "খাবারের সাথে",
-}
+schedules = explain.build_timetable(prescription)
 
 rows = []
-for m in prescription.medicines:
+for sched in schedules:
+    m = sched.medicine
     rows.append(
         {
             "ওষুধ": m.display_name,
             "শক্তি": m.strength or "—",
-            "কখন": m.dose_pattern or m.frequency or "—",
-            "খাবার": _FOOD_BN.get(m.food_timing or "", "—"),
+            # Decoded Bangla, never raw shorthand — "OD HS" means nothing to a patient.
+            "কখন খাবেন": sched.timing_bn,
             "কতদিন": m.duration or "—",
             "নিশ্চয়তা": f"{m.confidence * 100:.0f}%",
             "": "⚠️" if m.is_low_confidence else "✅",
@@ -94,8 +93,20 @@ st.dataframe(
     pd.DataFrame(rows),
     hide_index=True,
     width="stretch",
-    column_config={"": st.column_config.TextColumn(width="small")},
+    column_config={
+        "কখন খাবেন": st.column_config.TextColumn(width="large"),
+        "": st.column_config.TextColumn(width="small"),
+    },
 )
+
+# The doctor's own handwritten instruction line, kept verbatim. This is often where the
+# real timing detail lives, so it is shown rather than folded into the decoded text.
+for sched in schedules:
+    if sched.medicine.instructions_raw:
+        st.caption(
+            f"✍️ **{sched.medicine.display_name}** — ডাক্তারের লেখা: "
+            f"{sched.medicine.instructions_raw}"
+        )
 
 # RULES.md #3 — uncertain items are never presented as if they were certain.
 if low_conf:
@@ -119,6 +130,20 @@ if prescription.red_flags:
         + "\n\nদ্রুত ডাক্তারের সাথে যোগাযোগ করুন।",
         icon="🚨",
     )
+
+if prescription.diagnosis or prescription.complaints:
+    col_d, col_c = st.columns(2)
+    with col_d:
+        if prescription.diagnosis:
+            st.subheader("🩺 ডাক্তার যা লিখেছেন")
+            for d in prescription.diagnosis:
+                st.markdown(f"- {d}")
+            st.caption("এটি ডাক্তারের লেখা — অ্যাপ কোনো রোগ নির্ণয় করেনি।")
+    with col_c:
+        if prescription.complaints:
+            st.subheader("🗣️ যে সমস্যার কথা লেখা আছে")
+            for c in prescription.complaints:
+                st.markdown(f"- {c}")
 
 col_t, col_a = st.columns(2)
 with col_t:
@@ -147,10 +172,42 @@ st.info("🚧 TODO: per-drug Bangla explanation (see `explain.explain_prescripti
 
 # --- (c) Dose timetable -------------------------------------------------------------
 st.header("🕐 কখন কোন ওষুধ")
-# TODO: grid from explain.build_timetable → medicines as rows, config.DOSE_SLOTS as
-# columns (সকাল/দুপুর/সন্ধ্যা/রাত), amount per cell + food-timing note per row.
-# Add the antibiotic "finish the full course" tracker (Layer 3).
-st.info("🚧 TODO: dose timetable grid (see `explain.build_timetable`).", icon="🚧")
+
+grid_rows = []
+for sched in schedules:
+    row = {"ওষুধ": sched.medicine.brand or sched.medicine.generic or "?"}
+    by_key = {s.key: s.amount for s in sched.slots}
+    for key, label_bn, time_hint in config.DOSE_SLOTS:
+        amount = by_key.get(key, 0.0)
+        row[f"{label_bn}\n{time_hint}"] = explain._fmt_amount(amount) if amount else "—"
+    row["খাবার"] = sched.food_note_bn or "—"
+    grid_rows.append(row)
+
+if grid_rows and any(s.slots for s in schedules):
+    st.dataframe(pd.DataFrame(grid_rows), hide_index=True, width="stretch")
+else:
+    st.info("এই প্রেসক্রিপশনে নির্দিষ্ট সময়ের ছক তৈরি করা যায়নি।")
+
+for sched in schedules:
+    if sched.as_needed:
+        st.caption(
+            f"🔸 **{sched.medicine.display_name}** — নির্দিষ্ট সময় নেই, "
+            f"{prompts.SHORTHAND['SOS']['bn']}।"
+        )
+    if not sched.slots and not sched.as_needed:
+        st.caption(
+            f"🔸 **{sched.medicine.display_name}** — ডাক্তারের লেখা অনুযায়ী: "
+            f"{sched.timing_bn}"
+        )
+
+# Layer 3 — antibiotic course tracker.
+course_drugs = [s for s in schedules if s.is_course_drug]
+if course_drugs:
+    names = ", ".join(s.medicine.display_name for s in course_drugs)
+    st.warning(
+        f"💊 **{names}** — ভালো লাগলেও কোর্স শেষ করুন। "
+        "মাঝপথে অ্যান্টিবায়োটিক বন্ধ করলে জীবাণু আবার ফিরে আসতে পারে।"
+    )
 
 # --- (d) Listen ---------------------------------------------------------------------
 st.header("🔊 শুনুন")

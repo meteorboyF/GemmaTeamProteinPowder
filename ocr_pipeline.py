@@ -43,6 +43,9 @@ class Medicine:
     confidence: float = 0.0
     uncertain_fields: list[str] = field(default_factory=list)
     raw_text: str = ""
+    # The doctor's own how-to-take line, often handwritten Bangla. Preserved verbatim
+    # because it usually carries timing detail the shorthand alone does not.
+    instructions_raw: str | None = None
 
     @property
     def is_low_confidence(self) -> bool:
@@ -62,6 +65,8 @@ class Prescription:
     """A whole extracted Rx: the structured payload the Result page renders."""
 
     medicines: list[Medicine] = field(default_factory=list)
+    diagnosis: list[str] = field(default_factory=list)
+    complaints: list[str] = field(default_factory=list)
     tests: list[str] = field(default_factory=list)
     advice: list[str] = field(default_factory=list)
     follow_up: str | None = None
@@ -83,6 +88,8 @@ class Prescription:
         return json.dumps(
             {
                 "medicines": [m.__dict__ for m in self.medicines],
+                "diagnosis": self.diagnosis,
+                "complaints": self.complaints,
                 "tests": self.tests,
                 "advice": self.advice,
                 "follow_up": self.follow_up,
@@ -332,6 +339,7 @@ def coerce_medicine(item: dict[str, Any]) -> Medicine:
         confidence=_as_float(normalised.get("confidence"), default=0.0),
         uncertain_fields=_as_str_list(normalised.get("uncertain_fields")),
         raw_text=_as_str(normalised.get("raw_text")) or "",
+        instructions_raw=_as_str(normalised.get("instructions_raw")),
     )
 
     # A medicine with no confidence stated is not a confident medicine. Defaulting to
@@ -407,6 +415,8 @@ def parse_extraction(raw: str) -> Prescription:
 
     prescription = Prescription(
         medicines=medicines,
+        diagnosis=_as_str_list(data.get("diagnosis")),
+        complaints=_as_str_list(data.get("complaints")),
         tests=_as_str_list(data.get("tests")),
         advice=_as_str_list(data.get("advice")),
         follow_up=_as_str(data.get("follow_up")),
