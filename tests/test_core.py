@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import tempfile
 import unittest
@@ -8,6 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import config
+from browser_media import decode_browser_image
 import db
 import explain
 import safety
@@ -43,6 +45,37 @@ class SafetyTests(unittest.TestCase):
             medicines=[Medicine(brand="Definitely Unknown", confidence=.95)]
         )
         self.assertEqual(safety.run_all_checks(prescription), [])
+
+
+class BrowserUploadTests(unittest.TestCase):
+    def test_decodes_a_valid_browser_image_payload(self) -> None:
+        content = b"\x89PNG\r\nsynthetic"
+        payload = {
+            "name": "sample.png",
+            "type": "image/png",
+            "size": len(content),
+            "base64": base64.b64encode(content).decode("ascii"),
+        }
+        image = decode_browser_image(payload, max_bytes=1024)
+        self.assertIsNotNone(image)
+        self.assertEqual(image.content, content)
+
+    def test_rejects_invalid_or_oversized_payloads(self) -> None:
+        invalid = {
+            "name": "sample.exe",
+            "type": "application/octet-stream",
+            "size": 4,
+            "base64": "bm9wZQ==",
+        }
+        self.assertIsNone(decode_browser_image(invalid, max_bytes=1024))
+
+        oversized = {
+            "name": "sample.png",
+            "type": "image/png",
+            "size": 2048,
+            "base64": base64.b64encode(b"x" * 2048).decode("ascii"),
+        }
+        self.assertIsNone(decode_browser_image(oversized, max_bytes=1024))
 
 
 class ExplanationTests(unittest.TestCase):

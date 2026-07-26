@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-import config
+import browser_media
 from app import (
     SS_EXPLANATIONS,
     SS_IMAGE_BYTES,
@@ -43,27 +43,16 @@ image_bytes: bytes | None = None
 image_source = ""
 
 with tab_upload:
-    upload = st.file_uploader(
-        "PNG, JPG বা WebP ছবি দিন",
-        type=list(config.ALLOWED_IMAGE_TYPES),
-        help="ছবিটি শুধু বর্তমান ফলাফল তৈরির জন্য ব্যবহার হয়; সেভ করা আপনার পছন্দ।",
-    )
+    upload = browser_media.image_input(key="prescription_upload", mode="upload")
     if upload is not None:
-        image_bytes = upload.getvalue()
-        image_source = "আপলোড করা ছবি"
+        image_bytes = upload.content
+        image_source = f"আপলোড করা ছবি · {upload.name}"
 
 with tab_camera:
-    # st.camera_input requests camera permission as soon as it renders, and hangs the
-    # page on machines with no camera or a denied prompt — which is exactly the demo
-    # laptop failure mode. Gate it behind an explicit opt-in so merely opening Scan
-    # never triggers a permission dialog. Upload stays the default path.
-    if st.checkbox("ক্যামেরা চালু করুন"):
-        shot = st.camera_input("প্রেসক্রিপশনের ছবি তুলুন", label_visibility="collapsed")
-        if shot is not None:
-            image_bytes = shot.getvalue()
-            image_source = "ক্যামেরার ছবি"
-    else:
-        st.caption("ক্যামেরা ব্যবহার করতে উপরের বক্সে টিক দিন।")
+    shot = browser_media.image_input(key="prescription_camera", mode="camera")
+    if shot is not None:
+        image_bytes = shot.content
+        image_source = "ক্যামেরার ছবি"
 
 with tab_demo:
     st.markdown("#### রোগীর তথ্য ছাড়াই পুরো অভিজ্ঞতা দেখুন")
@@ -83,7 +72,11 @@ with tab_demo:
 if image_bytes:
     preview, action = st.columns([1, 1], vertical_alignment="center")
     with preview:
-        st.image(image_bytes, caption=image_source or "নির্বাচিত ছবি", width="stretch")
+        browser_media.image_preview(
+            image_bytes,
+            caption=image_source or "নির্বাচিত ছবি",
+            key="selected_prescription_preview",
+        )
     with action:
         st.markdown("### ছবিটি প্রস্তুত ✓")
         st.write("Gemma ওষুধ, ডোজের সংকেত, পরীক্ষা ও ডাক্তারের উপদেশ আলাদা করবে।")

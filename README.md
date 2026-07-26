@@ -44,6 +44,15 @@ streamlit run app.py
 
 `.env` is git-ignored and must never be committed (RULES.md #7).
 
+### Vercel deployment
+
+The production container uses `Dockerfile.vercel`. Vercel can route a Streamlit
+WebSocket and a later HTTP media request to different replicas, so the app does not use
+Streamlit's HTTP-backed uploader for session-specific files. `browser_media.py` sends
+upload/camera bytes through the active WebSocket and renders previews, generated audio,
+and downloads as browser data URIs. This avoids `Invalid session_id` upload failures
+without disabling XSRF protection.
+
 ### Optional: offline / local fallback
 
 ```bash
@@ -91,6 +100,7 @@ explain.py          Bangla explanation (model) + dose timetable (pure Python)
 safety.py           duplicate / interaction / max-dose checks — CSV-grounded
 tts.py              Bangla text-to-speech (gTTS)
 db.py               SQLite prescription history
+browser_media.py    replica-safe upload, camera, preview, audio, and downloads
 data/drugs_bd.csv   ~38 common BD brands ↔ generics, duplicate groups, dose ceilings
 pages/1_Scan.py     capture/upload
 pages/2_Result.py   table + explanation + timetable + listen + warnings

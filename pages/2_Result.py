@@ -17,6 +17,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+import browser_media
 import config
 import db
 import explain
@@ -309,7 +310,10 @@ else:
             else:
                 st.session_state["_speech_error"] = speech.error
     if st.session_state.get("_speech_audio"):
-        st.audio(st.session_state["_speech_audio"], format="audio/mp3")
+        browser_media.audio_player(
+            st.session_state["_speech_audio"],
+            key="prescription_speech_player",
+        )
     if st.session_state.get("_speech_error"):
         st.warning(st.session_state["_speech_error"])
         with st.expander("পড়ার লেখাটি দেখুন"):
@@ -350,12 +354,12 @@ with share_col:
     with st.container(border=True):
         st.subheader("পরিবারের জন্য সারাংশ")
         st.caption("ছবি বা ব্যক্তিগত যোগাযোগের তথ্য ছাড়া বাংলা টেক্সট।")
-        st.download_button(
+        browser_media.download_button(
             "⬇️ বাংলা সারাংশ ডাউনলোড করুন",
-            data=explain.prescription_share_text(prescription, schedules).encode("utf-8"),
+            explain.prescription_share_text(prescription, schedules).encode("utf-8"),
             file_name="oushudh-bondhu-summary.txt",
             mime="text/plain",
-            width="stretch",
+            key="prescription_summary_download",
         )
 with save_col:
     with st.container(border=True):

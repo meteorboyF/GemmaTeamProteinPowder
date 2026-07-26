@@ -85,6 +85,9 @@ DB_PATH = Path(os.getenv("DB_PATH", BASE_DIR / "oushudh.db"))
 MAX_IMAGE_DIM: int = 1600      # longest edge, px — keeps payloads under free-tier limits
 JPEG_QUALITY: int = 88
 ALLOWED_IMAGE_TYPES = ("png", "jpg", "jpeg", "webp")
+# Browser uploads travel through Streamlit's WebSocket on replicated deployments.
+# Keeping this deliberately modest limits memory/Base64 overhead before preprocessing.
+MAX_UPLOAD_SIZE_MB: int = int(os.getenv("MAX_UPLOAD_SIZE_MB", "12"))
 
 # --------------------------------------------------------------------------------
 # Extraction / confidence
